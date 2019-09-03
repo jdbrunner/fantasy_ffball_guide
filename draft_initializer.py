@@ -140,7 +140,7 @@ def GetHistory(pos):
 	historical_stats = {}
 
 	for yr,url in urls.items():
-		historical_stats[yr] = pd.concat([pd.read_html(url+'&cur_page='+str(p))[8] for p in range(5)])
+		historical_stats[yr] = pd.concat([pd.read_html(url+'&cur_page='+str(p))[7] for p in range(5)])
 		cols = ['Player'] + list(historical_stats[yr].iloc[1][1:].values)
 		historical_stats[yr].drop([0,1],inplace = True)
 		historical_stats[yr].columns = cols
@@ -153,7 +153,7 @@ def GetHistory(pos):
 	    if len(his) > len(tot_by_rk):
 	        tot_by_rk = tot_by_rk + [0]*(len(his)-len(tot_by_rk))
 	    for i in his.index:
-	        tot_by_rk[i-1] += float(his.loc[i,'FPts/G'])/float(his.loc[1,'FPts/G'])
+	        tot_by_rk[i-1] += float(his.loc[i,'FPts/G'])#/float(his.loc[1,'FPts/G'])
 
 	avg_by_rank = np.array(tot_by_rk)/len(historical_stats)
 
@@ -207,10 +207,14 @@ def Draft(player,draft_board,drafted_list,player_list,color_board,round,pick,ord
 		else:
 			npik = len(order)-1-pick
 		if round in draft_board.index:
-			if draft_board.loc[round,order[npik]] != ' ':#next is a keeper so skip
+			while draft_board.loc[round,order[npik]] != ' ':#next is a keeper so skip
 				pick = (pick + 1)%len(order)
 				if pick == 0:
 					round = round + 1
+				if round%2 == 1:
+					npik = pick
+				else:
+					npik = len(order)-1-pick
 	else:
 		drafted = False
 		playerli = player.split(' ')
@@ -383,7 +387,7 @@ def assess_player(player,player_list,round,pick,order,drafted_list,starting_slot
 	num_need = team_need(team,drafted_list,starting_slots)[1]
 	of_posit = num_need[fant_posi]
 	### Compute a final score
-	final_score = initial_score + 3*of_posit*round + 2*pos_availibility*round
+	final_score = initial_score + 1.5*of_posit*round + 0.75*pos_availibility*round
 	bdandw = (bd,bdl)
 	assessment = pd.DataFrame([[player_info['Pos'], player_info['Team'],final_score, risk, player_info['Tier'],player_info['PPG'],player_info['Rank'], ep,wd,bdandw, of_posit]], columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need'], index = [player])
 	return assessment
