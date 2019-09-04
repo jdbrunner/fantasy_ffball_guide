@@ -81,6 +81,10 @@ def initialize_league(scoring):
 	dst_teams = {'Chicago Bears':'CHI', 'Jacksonville Jaguars':'JAC', 'Los Angeles Rams':'LAR', 'Baltimore Ravens':'BAL', 'Minnesota Vikings':'MIN', 'Los Angeles Chargers':'LAC', 'Cleveland Browns':'CLE', 'Houston Texans':'HOU', 'New Orleans Saints':'NO', 'New England Patriots':'NE', 'Denver Broncos':'DEN', 'Buffalo Bills':'BUF', 'Dallas Cowboys':'DAL', 'Philadelphia Eagles':'PHI', 'Seattle Seahawks':'SEA', 'Pittsburgh Steelers':'PIT', 'Kansas City Chiefs':'KC', 'Tennessee Titans':'TEN', 'Indianapolis Colts':'IND', 'Carolina Panthers':'CAR', 'Atlanta Falcons':'ATL', 'Green Bay Packers':'GB', 'New York Jets':'NYJ', 'Washington Redskins':'WAS', 'Arizona Cardinals':'ARI', 'Detroit Lions':'DET', 'San Francisco 49ers':'SF', 'New York Giants':'NYG', 'Miami Dolphins':'MIA', 'Tampa Bay Buccaneers':'TB', 'Cincinnati Bengals':'CIN', 'Oakland Raiders':'OAK'}
 
 
+	historical = {}
+	for ps in fp_urls:
+		if ps != 'FLEX':
+			historical[ps] = GetHistory(ps)
 
 	fant_pros = {}
 	positional = {}
@@ -124,7 +128,7 @@ def initialize_league(scoring):
 				positional[p].loc[ply,'Std_Dev'] = float(fp_row['Std Dev'])#.astype(float)
 				positional[p].loc[ply,'Opp'] = fp_row['Opp']
 				if p != "DST":
-					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+"+".join(ply.lower().split(" "))+"+fantasy"
+					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+"+".join(ply.lower().split(" ")[:-1])+"+fantasy"
 				else:
 					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+ply+"+defense+fantasy"
 
@@ -370,10 +374,10 @@ def initialize_league(scoring):
 	# 	positional[p] = positional[p].style.format({'Info': make_clickable})
 	# 	available_positional[p] = available_positional[p].style.format({'Info': make_clickable})
 
-	return [player_list, positional, fant_pros,matchups, snap_analysis,targets, defense_stats,kicker_stats, taken_players, available_players, available_positional,rosters]
+	return [player_list, positional, fant_pros,matchups, snap_analysis,targets, defense_stats,kicker_stats, taken_players, available_players, available_positional,rosters,historical]
 
 ##### Management functions
-def this_week(week,available_positional,positional,matchups,snap_analysis,targets,kicker_stats,defense_stats,rost,positions):#, retu = False):
+def this_week(week,available_positional,positional,matchups,snap_analysis,targets,kicker_stats,defense_stats,rost,positions,history):#, retu = False):
 	'''Decide who to start/sit this week from a roster, and identify any potential available streamers'''
 	# if len(pos) == 0:
 	outof = 40
@@ -384,7 +388,7 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 	for p in [ps for ps in pos if ((ps != 'SUPERFLEX') and (ps != 'FLEX'))]:
 		# if p != 'FLEX':
 		on_ros = pd.DataFrame(rost[rost.Pos == p])
-		score_by_rk[p] = GetHistory(p)[1]
+		score_by_rk[p] = history[p][1]#GetHistory(p)[1]
 		# else:
 		# 	on_ros = pd.DataFrame(rost[[r in ['RB','WR','TE'] for r in rost.Pos]])
 		on_ros.index = on_ros.Player
@@ -395,10 +399,11 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 			pp = on_ros.loc[ply,'Pos'] #in case we are in the flex position
 			if ply in positional[p].index:
 				on_ros.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
-				on_ros.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg'])]
+				on_ros.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg']) -1]
 				on_ros.loc[ply,'Best'] = positional[p].loc[ply,'Best']
 				on_ros.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
 				on_ros.loc[ply,'Ceiling'] = on_ros.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
+				on_ros.loc[ply,'Info'] = positional[p].loc[ply,'Info']
 				if positional[p].loc[ply,'Opp'] != '':
 					on_ros.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
 				else:
@@ -465,10 +470,11 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 			pp = strm.loc[ply,'Pos.'] #in case we are in the flex position
 			if ply in positional[p].index:
 				strm.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
-				strm.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg'])]
+				strm.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg']) - 1]
 				strm.loc[ply,'Best'] = positional[p].loc[ply,'Best']
 				strm.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
 				strm.loc[ply,'Ceiling'] = strm.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
+				strm.loc[ply,'Info'] = positional[p].loc[ply,'Info']
 				strm.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
 			if ply in matchups[pp].index:
 				mtch = matchups[pp].loc[ply,str(week)]
@@ -576,105 +582,180 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 			streamers[p].drop('Utility %', axis =1 ,inplace = True)
 		# if not retu:
 		# 	print('Possible Streamers ',p,':\n', streamers[p].iloc[:5])
-	strmdict = dict([(p,streamers[p].iloc[:5]) for p in streamers.keys()])
-	return[starters, bench, strmdict]
-
-	# else:
-	# 	for p in pos:
-	# 		# lineup[p].drop('FTeam',axis = 1,inplace = True)
-	# 		lineup[p].drop('Player',axis = 1, inplace = True)
-	# 		lineup[p].drop('Best',axis = 1,inplace = True)
-	# 		lineup[p].drop('Worst',axis = 1, inplace = True)
-	# 		if 'Snap %' in lineup[p].columns:
-	# 			lineup[p].drop('Snap %', axis = 1,inplace = True)
-	# 			lineup[p].drop('Utility %',axis = 1, inplace = True)
-	# 		if p in ['RB','WR','FLEX','TE']:
-	# 			lineup[p] = lineup[p][['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score','FP/G','Avg Targets','Use %']]
-	# 		elif p == 'QB':
-	# 			lineup[p] = lineup[p][['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score','FP/G']]
-	# 		elif p == 'K':
-	# 			lineup[p] = lineup[p][['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score','FP/G','FGA','PCT']]
-	# 		elif p == 'DST':
-	# 			lineup[p] = lineup[p][['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score']]
-	# 		# if not retu:
-	# 		# 	print('On team: ',p,':\n', lineup[p])
-	# 		#streamers[p].drop('Notes', axis =1 ,inplace = True)
-	# 		#streamers[p].drop('FP_Notes', axis =1 ,inplace = True)
-	# 		streamers[p].drop('ROS_Avg', axis =1 ,inplace = True)
-	# 		streamers[p].drop('ROS_Best', axis =1 ,inplace = True)
-	# 		streamers[p].drop('ROS_Worst', axis =1 ,inplace = True)
-	# 		streamers[p].drop('ROS_Std', axis =1 ,inplace = True)
-	# 		# streamers[p].drop('ROS_Notes', axis =1 ,inplace = True)
-	# 		if 'Snap %' in streamers[p].columns:
-	# 			streamers[p].drop('Snap %', axis =1 ,inplace = True)
-	# 			streamers[p].drop('Utility %', axis =1 ,inplace = True)
-	# 		# if not retu:
-	# 		# 	print('Possible Streamers ',p,':\n', streamers[p].iloc[:5])
-	# 	return[lineup[p], streamers[p]]
+	strmdict = {}
+	lineup = dict([(lp,lineup[lp]) for lp in lineup.keys() if len(lineup[lp]) >0])
+	streamers = dict([(lp,streamers[lp]) for lp in streamers.keys() if lp in lineup.keys()])
+	for p in streamers.keys():
+			min_sc = min(lineup[p].loc[:,'Final'])
+			strmdict[p] = streamers[p][streamers[p].loc[:,'Final']>min_sc].sort_values('Final', ascending = False)
+	return[starters, bench, strmdict, lineup, streamers]
 
 
-def player_look(player,player_list,flx = False):
-	'''get rankings, stats, and news for a player'''
-	if any([player in nm for nm in player_list.index]):
-		unranked = len(player_list)
-
-		plyer_ID = player_list.index[[player in nm for nm in  Players.index]][0]
-
-		player_series = player_list.loc[player_ID]
-		pos = player_series['Pos.']
-		tm = player_series.Team
-		if flx:
-			if plyer_ID in ros_rks['FLEX'].index:
-				player_series.ROS_Avg = ros_rks['FLEX'].loc[plyer_ID,'Avg']
-				player_series.ROS_Best = ros_rks['FLEX'].loc[plyer_ID,'Best']
-				player_series.ROS_Worst = ros_rks['FLEX'].loc[plyer_ID,'Worst']
-				player_series.ROS_Std = ros_rks['FLEX'].loc[plyer_ID,'Std Dev']
+def rest_of_schedule(week,available_positional,positional,matchups,snap_analysis,targets,kicker_stats,defense_stats,rost,positions,history):#, retu = False):
+	'''A look at the ROS'''
+	# if len(pos) == 0:
+	outof = 40
+	pos = [ps for ps in positions.keys() if ps != 'BENCH']
+	lineup = dict()
+	streamers = dict()
+	score_by_rk = dict()
+	for p in [ps for ps in pos if ((ps != 'SUPERFLEX') and (ps != 'FLEX'))]:
+		# if p != 'FLEX':
+		on_ros = pd.DataFrame(rost[rost.Pos == p])
+		score_by_rk[p] = history[p][1]#GetHistory(p)[1]
+		# else:
+		# 	on_ros = pd.DataFrame(rost[[r in ['RB','WR','TE'] for r in rost.Pos]])
+		on_ros.index = on_ros.Player
+		strm = pd.DataFrame(available_positional[p][available_positional[p].Opp != ''])
+		for ind in strm.index:
+			strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
+		for ply in on_ros.index:
+			pp = on_ros.loc[ply,'Pos'] #in case we are in the flex position
+			if ply in positional[p].index:
+				on_ros.loc[ply,'Avg'] = positional[p].loc[ply,'ROS_Avg']
+				on_ros.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'ROS_Avg']) - 1]
+				on_ros.loc[ply,'Best'] = positional[p].loc[ply,'ROS_Best']
+				on_ros.loc[ply,'Worst'] = positional[p].loc[ply,'ROS_Worst']
+				on_ros.loc[ply,'Ceiling'] = on_ros.loc[ply,'Best']*positional[p].loc[ply,'ROS_Std']
+				on_ros.loc[ply,'Info'] = positional[p].loc[ply,'Info']
+			if ply in matchups[pp].index:
+				mtch = matchups[pp].loc[ply].values[week:]
+				avg_mt = 0.0
+				for mt in mtch:
+					if mt != 'nan':
+						if mt != 'BYE':
+							numbers = where([car.isdigit() for car in mt])[0]
+							if len(numbers)>1:
+								avg_mt += float(mt[numbers[0]:numbers[1]+1])
+							else:
+								avg_mt += float(mt[numbers[0]:numbers[0]+1])
+				avg_mt = avg_mt/sum([mt != 'BYE' for mt in mtch])
+				on_ros.loc[ply,'Matchup Rank'] = avg_mt
 			else:
-				player_series.ROS_Avg = unranked
-				player_series.ROS_Best = unranked
-				player_series.ROS_Worst = unranked
-				player_series.ROS_Std = unranked
-		else:
-			if plyer_ID in ros_rks[pos].index:
-				player_series.ROS_Avg = ros_rks[pos].loc[plyer_ID,'Avg']
-				player_series.ROS_Best = ros_rks[pos].loc[plyer_ID,'Best']
-				player_series.ROS_Worst = ros_rks[pos].loc[plyer_ID,'Worst']
-				player_series.ROS_Std = ros_rks[pos].loc[plyer_ID,'Std Dev']
-			else:
-				player_series.ROS_Avg = unranked
-				player_series.ROS_Best = unranked
-				player_series.ROS_Worst = unranked
-				player_series.ROS_Std = unranked
-		if pos in targets:
-			if plyer_ID in targets[pos].index:
-				player_series['AvgTargets'] = targets[pos].loc[plyer_ID,'AVG']
-		if pos in snap_analysis:
-			if plyer_ID in snap_analysis[pos].index:
-				player_series['AvgSnaps'] = snap_analysis[pos].loc[plyer_ID, 'Snaps/Gm']
-				player_series['Snap%'] = snap_analysis[pos].loc[plyer_ID, 'Snap %']/100
-				player_series['Utility%'] = snap_analysis[pos].loc[plyer_ID, 'Util %']/100
-				player_series['Usage'] = player_series['Snap%']*player_series['Utility%']
-				player_series['FantPoints/Game'] = snap_analysis[pos].loc[plyer_ID, 'Fantasy Pts']/snap_analysis[pos].loc[plyer_ID, 'Games']
-		if plyer_ID in taken_players.index:
-			player_series['Fant_Team'] = taken_players.loc[plyer_ID, 'FTeam']
-		else:
-			player_series['Fant_Team'] = 'Available'
-		return player_series
-	else:
-		print('no player')
-		return None
+				on_ros.loc[ply,'Matchup Rank'] = 129
 
-def make_ros_list(pos):
-	ply_dict = dict()
-	if pos != 'FLEX':
-		for ply in positional[pos].index:
-			ply_dict[ply] = player_look(ply)
-	else:
-		for ply in positional[pos].index:
-			ply_dict[ply] = player_look(ply, flx = True)
-	ply_df = pd.DataFrame.from_dict(ply_dict, orient = 'index')
-	ply_df.sort_values('ROS_Avg', inplace = True)
-	return(ply_df)
+			if p not in ['K','DST']:
+				if ply in snap_analysis[pp].index:
+					on_ros.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
+					on_ros.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
+					on_ros.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
+					on_ros.loc[ply,'Use %'] = on_ros.loc[ply,'Snap %']*on_ros.loc[ply,'Utility %']
+					if p != 'QB':
+						if ply in targets[pp].index:
+							on_ros.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
+							stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*on_ros.loc[ply,'Avg Targets']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
+					else:
+						stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
+					on_ros.loc[ply,'Stat Score'] = stscr
+				else:
+					on_ros.loc[ply,'Stat Score'] = 0
+			elif p == 'K':
+				if ply in kicker_stats.index:
+					on_ros.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
+					on_ros.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
+					on_ros.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
+					stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'FGA']*on_ros.loc[ply,'PCT']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
+					on_ros.loc[ply, 'Stat Score'] = stscr
+				else:
+					on_ros.loc[ply,'Stat Score'] = 0
+			elif p == 'DST':
+				if ply in defense_stats.index:
+					on_ros.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
+					on_ros.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
+					stscr = (32+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*2)*on_ros.loc[ply,'FP/G']
+					on_ros.loc[ply,'Stat Score'] = stscr
+				else:
+					on_ros.loc[ply,'Stat Score'] = 0
+		if len(on_ros) >0:
+			srtd_by_stat_score = on_ros.sort_values('Stat Score', ascending = False).index
+			for ply in on_ros.index:
+				on_ros.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score == ply)[0][0]
+				on_ros.loc[ply, 'Final'] = on_ros.loc[ply,'FP_Pred']*((outof - on_ros.loc[ply, 'Stat Rank'])/outof)#(on_ros.loc[ply, 'Stat Rank'] + on_ros.loc[ply, 'Avg'])/2
+			on_ros.sort_values('Final', inplace = True, ascending = False, axis=0)
+		lineup[p] = on_ros.copy()
+		#### streamers
+		for ply in strm.index:
+			pp = strm.loc[ply,'Pos.'] #in case we are in the flex position
+			if ply in positional[p].index:
+				strm.loc[ply,'Avg'] = positional[p].loc[ply,'ROS_Avg']
+				strm.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'ROS_Avg'])-1]
+				strm.loc[ply,'Best'] = positional[p].loc[ply,'ROS_Best']
+				strm.loc[ply,'Worst'] = positional[p].loc[ply,'ROS_Worst']
+				strm.loc[ply,'Ceiling'] = strm.loc[ply,'ROS_Best']*positional[p].loc[ply,'ROS_Std']
+				strm.loc[ply,'Info'] = positional[p].loc[ply,'Info']
+			if ply in matchups[pp].index:
+				mtch = matchups[pp].loc[ply].values[week:]
+				avg_mt = 0.0
+				for mt in mtch:
+					if mt != 'nan':
+						if mt != 'BYE':
+							numbers = where([car.isdigit() for car in mt])[0]
+							if len(numbers)>1:
+								avg_mt += float(mt[numbers[0]:numbers[1]+1])
+							else:
+								avg_mt += float(mt[numbers[0]:numbers[0]+1])
+				avg_mt = avg_mt/sum([mt != 'BYE' for mt in mtch])
+				strm.loc[ply,'Matchup Rank'] = avg_mt
+			else:
+				strm.loc[ply,'Matchup Rank'] = 129
+			if p not in ['K','DST']:
+				if ply in snap_analysis[pp].index:
+					strm.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
+					strm.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
+					strm.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
+					strm.loc[ply,'Use %'] = strm.loc[ply,'Snap %']*strm.loc[ply,'Utility %']
+					if p != 'QB':
+						if ply in targets[pp].index:
+							strm.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
+							stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*strm.loc[ply,'Avg Targets']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
+					else:
+						stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
+					strm.loc[ply,'Stat Score'] = stscr
+				else:
+					strm.loc[ply,'Stat Score'] = 0
+			elif p == 'K':
+				if ply in kicker_stats.index:
+					strm.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
+					strm.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
+					strm.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
+					stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'FGA']*strm.loc[ply,'PCT']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
+					strm.loc[ply, 'Stat Score'] = stscr
+				else:
+					strm.loc[ply,'Stat Score'] = 0
+			elif p == 'DST':
+				if ply in defense_stats.index:
+					strm.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
+					strm.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
+					stscr = (32+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*2)*strm.loc[ply,'FP/G']
+					strm.loc[ply,'Stat Score'] = stscr
+				else:
+					strm.loc[ply,'Stat Score'] = 0
+		srtd_by_stat_score_str = strm.sort_values('Stat Score', ascending = False).index
+		for ply in strm.index:
+			strm.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score_str == ply)[0][0]
+			strm.loc[ply, 'Final'] = strm.loc[ply,'FP_Pred']*((outof - strm.loc[ply, 'Stat Rank'])/outof)#(strm.loc[ply, 'Stat Rank'] + strm.loc[ply, 'Avg'])/2
+		strm.sort_values('Final', inplace = True, ascending = False,axis=0)
+		streamers[p] = strm
+
+	lineup['FLEX'] = pd.concat([lineup['RB'],lineup['WR'],lineup['TE']], sort = True)
+	lineup['FLEX'].sort_values('Final',inplace = True)
+	lineup['SUPERFLEX'] = pd.concat([lineup['FLEX'],lineup['QB']],sort = True)
+	lineup['SUPERFLEX'].sort_values('Final',inplace = True)
+
+	streamers['FLEX'] = pd.concat([streamers['RB'],streamers['WR'],streamers['TE']],sort = True)
+	streamers['FLEX'].sort_values('Final',inplace = True)
+	streamers['SUPERFLEX'] = pd.concat([streamers['FLEX'],streamers['QB']],sort = True)
+	streamers['SUPERFLEX'].sort_values('Final',inplace = True)
+
+	strmdict = {}
+	lineup = dict([(lp,lineup[lp]) for lp in lineup.keys() if len(lineup[lp]) >0])
+	streamers = dict([(lp,streamers[lp]) for lp in streamers.keys() if lp in lineup.keys()])
+	for p in streamers.keys():
+			min_sc = min(lineup[p].loc[:,'Final'])
+			strmdict[p] = streamers[p][streamers[p].loc[:,'Final']>min_sc].sort_values('Final', ascending = False)
+
+	return[lineup, streamers, strmdict]
+
 
 
 def team_score(tm, give = [], get = []):
