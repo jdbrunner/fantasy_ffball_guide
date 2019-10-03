@@ -163,11 +163,14 @@ def MakeDataPoint(playerDF, scoring,offdvoa,defdvoa, minyr = 2001,key = tmky):
             ROSA = 0
             ROST = 0
         player_data[int(dat[4])] = ([str(dt) for dt in dat[0].index],[float(dt) for dt in dat[0].values],float(dat[1]),float(season_total),float(ROSA),float(ROST))
-    return player_data,stillin,key[team]
+    if stillin:
+        return player_data,stillin,key[team]
+    else:
+        return player_data,stillin,"NoTeamNeeded"
 
 pos = ['QB', 'RB', 'WR', 'TE','DST','K']
 
-scoringrules = {"Rushing-Yds":0.1,"Rushing-TD":6,"Receiving-Yds":0.1, "Receiving-Rec":0.5,"Receiving-TD":0.6,"Passing-Yds":0.04,"Passing-TD":4,"Passing-Int":-2.0,"Fumbles-Fmb":-2.0}
+scoringrules = {"Rushing-Yds":0.1,"Rushing-TD":6,"Receiving-Yds":0.1, "Receiving-Rec":0.5,"Receiving-TD":0.6,"Passing-Yds":0.04,"Passing-TD":4,"Passing-Int":-2.0,"Fumbles-Fmb":-2.0,"Kick Returns-Yds":0.04, "Punt Returns-Yds":0.04, "Kick Returns-TD":6,"Punt Returns-TD":6,"Scoring-2PM":2,"Fumbles-TD":6}
 
 odvs = {}
 ddvs = {}
@@ -247,7 +250,7 @@ for position in ['QB','RB', 'WR', 'TE']:
                     # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                     #dict of tuples keyed by game # in career. tuple is (stat key, stat array, fantasy points, season total points, ROS point average, ROS point total)
                     plydata,needname,cteam = MakeDataPoint(plDF,scoringrules,odvs,ddvs)
-                    if cteam = 'JAC':
+                    if cteam == 'JAC':
                         cteam = 'JAX'
                     if len(plydata):
                         posdata[nm]= plydata
@@ -255,7 +258,7 @@ for position in ['QB','RB', 'WR', 'TE']:
                         pfr_namekeys[nm] = pa.get_text().split('(')[0] + '- ' + cteam
                 # except:
                 #     None
-    with open('playerdata/'+position+'data.pkl','wb') as handle:
+    with open('playerdata/halfppr'+position+'data.pkl','wb') as handle:
         pickle.dump(posdata,handle)
 
 with open('playerdata/pfr_namekeys.pkl','wb') as handle:
