@@ -13,11 +13,16 @@
 from pylab import *
 import pandas as pd
 import sys
+from scipy.stats import nbinom
+import numpy as np
+import requests as rq
+from bs4 import BeautifulSoup
 
 # Display size
 pd.set_option('display.max_colwidth', 200)
 pd.set_option('display.width', None)
 pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
 
 nfl_teams = {'Buffalo':'Bills', 'Miami':'Dolphins', 'New England':'Patriots', 'New York NYJ':'Jets',
 				'Baltimore':'Ravens', 'Cincinnati':'Bengals', 'Cleveland':'Browns', 'Pittsburgh':'Steelers',
@@ -46,8 +51,281 @@ def make_clickable(val):
     # target _blank to open new window
     return '<a target="_blank" href="{}">{}</a>'.format(val, val)
 
+
+def download_info(scoring):
+
+	if scoring == "standard":
+		url_1 = ""
+	elif scoring == "half":
+		url_1 = "half-point-ppr-"
+	elif scoring == "ppr":
+		url_1 = "ppr-"
+
+	fp_urls = {'QB':"https://www.fantasypros.com/nfl/rankings/qb.php",
+					'RB': "https://www.fantasypros.com/nfl/rankings/"+url_1+"rb.php",
+					'WR': "https://www.fantasypros.com/nfl/rankings/"+url_1+"wr.php",
+					'TE': "https://www.fantasypros.com/nfl/rankings/"+url_1+"te.php",
+					'FLEX': "https://www.fantasypros.com/nfl/rankings/"+url_1+"flex.php",
+					'DST': "https://www.fantasypros.com/nfl/rankings/dst.php",
+					'K': "https://www.fantasypros.com/nfl/rankings/k.php"}
+
+	match_urls = {'QB':"https://www.fantasypros.com/nfl/matchups/qb.php",
+				'RB': "https://www.fantasypros.com/nfl/matchups/rb.php",
+				'WR': "https://www.fantasypros.com/nfl/matchups/wr.php",
+				'TE': "https://www.fantasypros.com/nfl/matchups/te.php",
+				'K': "https://www.fantasypros.com/nfl/matchups/k.php",
+				'DST': "https://www.fantasypros.com/nfl/matchups/dst.php"}
+
+	ros_urls = {'QB':"https://www.fantasypros.com/nfl/rankings/ros-qb.php",'RB': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"rb.php",'WR': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"wr.php",'TE': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"te.php",'FLEX':"https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"flex.php",'DST': "https://www.fantasypros.com/nfl/rankings/ros-dst.php",'K':"https://www.fantasypros.com/nfl/rankings/ros-k.php"}
+
+	snap_count_urls = {'QB':"https://www.fantasypros.com/nfl/reports/snap-counts/qb.php",
+				'RB': "https://www.fantasypros.com/nfl/reports/snap-counts/rb.php",
+				'WR': "https://www.fantasypros.com/nfl/reports/snap-counts/wr.php",
+				'TE': "https://www.fantasypros.com/nfl/reports/snap-counts/te.php"}
+
+	snap_count_perc_urls = {'QB':"https://www.fantasypros.com/nfl/reports/snap-counts/qb.php?show=perc",
+				'RB': "https://www.fantasypros.com/nfl/reports/snap-counts/rb.php?show=perc",
+				'WR': "https://www.fantasypros.com/nfl/reports/snap-counts/wr.php?show=perc",
+				'TE': "https://www.fantasypros.com/nfl/reports/snap-counts/te.php?show=perc"}
+
+	snap_analysis_urls = {'QB':"https://www.fantasypros.com/nfl/reports/snap-count-analysis/qb.php?scoring=HALF",
+				'RB': "https://www.fantasypros.com/nfl/reports/snap-count-analysis/rb.php?scoring=HALF",
+				'WR': "https://www.fantasypros.com/nfl/reports/snap-count-analysis/wr.php?scoring=HALF",
+				'TE': "https://www.fantasypros.com/nfl/reports/snap-count-analysis/te.php?scoring=HALF"}
+
+	targets_urls = {'RB': "https://www.fantasypros.com/nfl/reports/targets/rb.php",'WR': "https://www.fantasypros.com/nfl/reports/targets/wr.php",'TE': "https://www.fantasypros.com/nfl/reports/targets/te.php"}
+
+
+
+	for p in fp_urls:
+		fant_pros = pd.read_html(fp_urls[p])[0]
+		fant_pros.to_pickle('leagueinfo/' + p +'.ecr')
+
+
+	for p in match_urls:
+		matchups = pd.read_html(match_urls[p])[0]
+		matchups.to_pickle('leagueinfo/'+p+'.matchups')
+
+	for p in ros_urls:
+		fant_pros_ros = pd.read_html(ros_urls[p])[0]
+		fant_pros_ros.to_pickle('leagueinfo/' + p +'.ros')
+
+	ros_overall = pd.read_html("https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"overall.php")[0]
+	ros_overall.to_pickle('leagueinfo/overall.ros')
+
+	for p in snap_count_urls:
+		snap_counts = pd.read_html(snap_count_urls[p])[0]
+		snap_counts.to_pickle('leagueinfo/' + p +'.snc')
+
+	for p in snap_count_perc_urls:
+		snap_count_perc = pd.read_html(snap_count_perc_urls[p])[0]
+		snap_count_perc.to_pickle('leagueinfo/' + p +'.snp')
+
+	for p in snap_analysis_urls:
+		snap_analysis = pd.read_html(snap_analysis_urls[p])[0]
+		snap_analysis.to_pickle('leagueinfo/' + p +'.sna')
+
+	for p in targets_urls:
+		targets = pd.read_html(targets_urls[p])[0]
+		targets.to_pickle('leagueinfo/' + p +'.targets')
+
+	kicker_stats = pd.read_html("https://www.fantasypros.com/nfl/stats/k.php")[0]
+	kicker_stats.to_pickle('leagueinfo/kicker.stats')
+
+	defense_stats = pd.read_html("https://www.fantasypros.com/nfl/stats/dst.php")[0]
+	defense_stats.to_pickle('leagueinfo/dst.stats')
+
+	return None
+
+
+
+
+def draw_score(probs,alldata):
+
+
+	# ranu = np.random.rand(len(probs))
+	# rank_draw = sum([ranu[i] < probs[i] for i in range(len(probs))])
+	# ranu = np.random.rand()
+	# rank_draw = sum([ranu < probs[i] for i in range(len(probs))])#np.where(withran == ranu)
+	# rank_draw = min(rank_draw,len(alldata)-1)
+
+	ranu = np.random.rand()
+	rank_draw = min([i for i in range(len(probs)) if probs[i] < ranu] + [len(alldata)])
+	rank_draw = min(rank_draw,len(alldata)-1)
+
+
+
+
+	distr = alldata[rank_draw]
+	distr.sort()
+
+	norml = len(distr)
+
+	scr_draw = np.random.randint(0,high = norml)
+	score = distr[scr_draw]
+
+	return rank_draw,score
+
+def estimate_score(avg_rk,std_rk,statscr,alldata,posSize,numtrials =1000):
+
+	rnk = 0
+	score = 0
+
+	ecr = avg_rk*statscr
+	kparm = std_rk + 0.2*avg_rk
+	probs = np.array([1/(1+np.exp((i-ecr)/kparm)) for i in range(posSize)])#make_pb_CDF(mu,kparm,posSize)
+
+
+
+	for j in range(numtrials):
+		r,s = draw_score(probs,alldata)
+		rnk += r
+		score += s
+	return rnk/numtrials, score/numtrials
+
+
+def get_statvec(tp,kys):
+    statdic = dict([(tp[0][i],tp[1][i]) for i in range(len(tp[0]))])
+    return (tp[2],[statdic[stat] if stat in statdic.keys() else 0 for stat in kys])
+
+def get_statvec_noopp(tp,kys):
+    statdic = dict([(tp[0][i],tp[1][i]) for i in range(len(tp[0]))])
+    newkys = [ky for ky in kys if 'Opp' not in ky]
+    return (tp[2],[statdic[stat] if stat in statdic.keys() else 0 for stat in newkys])
+
+#player is index from player_list, alldata is positional data from PFR, datakey is name to url from PFR, oppo is week's opponent, ddvs is defense DVOA DF
+def get_GNeighbor_Score(player,alldata,datakey,oppo,ddvs):
+	playerall = alldata[datakey[player]]
+	lastgm = max(playerall.keys())
+	playernow = playerall[lastgm]
+	# oppo = playerlist.loc[player,'Opp'].split(' ')[1]
+	playerdat = copy(playernow[1])
+	playerdat[-3] = float(ddvs.loc[oppo,'DEF.  DVOA'].replace('%',''))
+	playerdat[-2] = float(ddvs.loc[oppo,'RUSH  DEF.'].replace('%',''))
+	playerdat[-1] = float(ddvs.loc[oppo,'PASS  DEF.'].replace('%',''))
+
+	flat_Data_wkly = [get_statvec(tp,playernow) for di in alldata.values() for tp in di.values()]
+
+	bnd = 10**(-1)
+	weights = np.ones(len(playerdat))
+	alldists = [(fd[0],(bnd/np.sqrt(2*np.pi**len(playerdat)))*np.exp(-0.5*np.dot(playerdat - fd[1],weights*np.array(playerdat - fd[1]))*bnd)) for fd in flat_Data]
+	scling = sum([f[1] for f in alldists])
+	scorepred = (1/scling)*sum([d[0]*d[1] for d in alldists])
+
+	flat_data_ros = [get_statvec_noopp(tp,playernow) for di in alldata.values() for tp in di.values()]
+	player_ros = playerdat[:-3]
+
+	weightsros = np.ones(len(player_ros))
+	alldists_ros = [(fd[0],(bnd/np.sqrt(2*np.pi**len(player_ros)))*np.exp(-0.5*np.dot(player_ros - fd[1],weightsros*np.array(player_ros - fd[1]))*bnd)) for fd in flat_data_ros]
+	scling_ros = sum([f[1] for f in alldists_ros])
+	scorepred_ros = (1/scling_ros)*sum([d[0]*d[1] for d in alldists_ros])
+
+	return scorepred,scorepred_ros
+
+def make_rosters_from_espn(league_URL,yourswid,yourespn_s2,teams = {}):
+
+
+	nfltms = {'22': 'ARI','1': 'ATL','2': 'BUF','33': 'BAL','29': 'CAR','3': 'CHI','4': 'CIN','5': 'CLE','6': 'DAL','7': 'DEN','8': 'DET','9': 'GB','34':'HOU','11': 'IND','30':'JAC','12': 'KC','24': 'LAC','14': 'LAR','15': 'MIA','16': 'MIN','17': 'NE','18': 'NO','19': 'NYG','20': 'NYJ','13': 'OAK','21': 'PHI','23': 'PIT','26': 'SEA','25': 'SF','27': 'TB','10': 'TEN','28':'WAS','0':'FA'}
+
+
+	posdict = {1:'QB',2:'RB',3:'WR',4:'TE',5:'K',16:'DST'}
+
+
+	req1 = rq.get(league_URL, params = {'view':'mTeam'}, cookies = {'swid':yourswid,'espn_s2':yourespn_s2})
+	pg1 = req1.json()
+
+	tmids = dict([(tm['id'],tm['location'] + ' ' + tm['nickname']) for tm in pg1['teams']])#for tm in pg['teams']:
+
+	req2 = rq.get(league_URL, params = {'view':'mMatchup'}, cookies = {'swid':yourswid,'espn_s2':yourespn_s2})
+	pg2 = req2.json()
+
+	rostertab = pd.DataFrame(columns = ['Pos','Player','FTeam'])
+
+	rosters = {}
+
+	for tm in pg2['teams']:
+		rostertab = pd.DataFrame(columns = ['Pos','Player','FTeam'], index = range(len(tm['roster']['entries'])))
+		fteam = tmids[tm['id']]
+		rwcnt = 0
+		for pl in tm['roster']['entries']:
+			plnm = pl["playerPoolEntry"]['player']['fullName']
+			plnm = ' '.join(plnm.split(' ')[:2])
+			# print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+			# print(plnm)
+			plpos = posdict[int(pl["playerPoolEntry"]['player']['defaultPositionId'])]
+			nfltm = nfltms[str(pl["playerPoolEntry"]['player']['proTeamId'])]
+			if plpos == 'DST':
+				plnm = nfltm
+			rostertab.loc[rwcnt,'Pos'] = plpos
+			rostertab.loc[rwcnt,'Player'] = plnm + ' - '+nfltm
+			rostertab.loc[rwcnt,'FTeam'] = fteam
+			rwcnt += 1
+		rosters[fteam] = rostertab
+
+	return rosters
+
+
+
+
+def make_rosters_from_yahoo(league_URL,positional,player_list,teams = {}):
+	req = rq.get(league_URL)
+	sp = BeautifulSoup(req.text)
+
+	cols = ['Pos','Player']
+
+	rosters = dict()
+	# for i in range(len(teams)):
+	for d in sp.find_all('div'):
+		if len(d.find_all('table')) ==1 and len(d.find_all('p')) == 1:
+
+			table = d.find_all('table')[0]
+
+			the_rost = pd.DataFrame(index = range(len(table.find_all('tr'))-1),columns = cols) # I know the size
+
+
+			row_marker = 0
+			for row in table.find_all('tr')[1:]:
+				column_marker = 0
+				columns = row.find_all('td')
+				for column in columns:
+					the_rost.loc[row_marker,cols[column_marker]] = str(column.get_text())
+					column_marker += 1
+				row_marker +=1
+			# the_rost = make_table_from_yahoo(d.find_all('table')[0])#raw_rosters[i].copy()
+			tmnam = d.find_all('p')[0].a.text
+			# print(the_rost.loc[:,'Player'])
+			the_rost['Pos'] = ['    ']*len(the_rost)
+			for ii in the_rost.index:
+				if 'DEF' in the_rost.loc[ii,'Player']:
+					for tm in positional['DST']['Team']:
+						if ' '+tm.lower()+' ' in str(the_rost.loc[ii,'Player']).lower():
+							the_rost.loc[ii,'Player'] = positional['DST'].index[positional['DST']['Team']==tm][0]
+							the_rost.loc[ii,'Pos'] = 'DST'
+				else:
+					for pl in player_list.index:
+						if player_list.loc[pl,'Pos.'] != 'DST':
+							plnm1 = pl.split(' - ')[0].replace('.','')
+							plnm2 = pl.split(' - ')[0]
+							pltm = pl.split(' - ')[1]
+							if pltm == 'JAC':
+								pltm = 'JAX'
+							chk1 = plnm1.split(' ')[0] in the_rost.loc[ii, 'Player'] and plnm1.split(' ')[1] in the_rost.loc[ii, 'Player'] and pltm in the_rost.loc[ii, 'Player'].upper()
+							chk2 = plnm2.split(' ')[0] in the_rost.loc[ii, 'Player'] and plnm2.split(' ')[1] in the_rost.loc[ii, 'Player'] and pltm in the_rost.loc[ii, 'Player'].upper()
+							if chk1 or chk2:
+								the_rost.loc[ii,'Player'] = pl
+								the_rost.loc[ii,'Pos'] = player_list[player_list['Pos.'] != 'FLEX'].loc[pl, 'Pos.']
+			if len(teams):
+				rosters[teams[tmnam]] = the_rost
+			else:
+				rosters[tmnam] = the_rost
+
+
+
+	return rosters
+
+
 ########################### Add Expert Rankings ######################################
-def initialize_league(scoring):
+def initialize_league(week,scoring,league_URL,site = "yahoo",teams = {},yourswid = " ",yourespn_s2 = " "):
 
 	'''
 	Data Frames Created:
@@ -68,8 +346,6 @@ def initialize_league(scoring):
 		url_1 = "ppr-"
 
 
-
-
 	fp_urls = {'QB':"https://www.fantasypros.com/nfl/rankings/qb.php",
 					'RB': "https://www.fantasypros.com/nfl/rankings/"+url_1+"rb.php",
 					'WR': "https://www.fantasypros.com/nfl/rankings/"+url_1+"wr.php",
@@ -78,50 +354,90 @@ def initialize_league(scoring):
 					'DST': "https://www.fantasypros.com/nfl/rankings/dst.php",
 					'K': "https://www.fantasypros.com/nfl/rankings/k.php"}
 
+
+
 	dst_teams = {'Chicago Bears':'CHI', 'Jacksonville Jaguars':'JAC', 'Los Angeles Rams':'LAR', 'Baltimore Ravens':'BAL', 'Minnesota Vikings':'MIN', 'Los Angeles Chargers':'LAC', 'Cleveland Browns':'CLE', 'Houston Texans':'HOU', 'New Orleans Saints':'NO', 'New England Patriots':'NE', 'Denver Broncos':'DEN', 'Buffalo Bills':'BUF', 'Dallas Cowboys':'DAL', 'Philadelphia Eagles':'PHI', 'Seattle Seahawks':'SEA', 'Pittsburgh Steelers':'PIT', 'Kansas City Chiefs':'KC', 'Tennessee Titans':'TEN', 'Indianapolis Colts':'IND', 'Carolina Panthers':'CAR', 'Atlanta Falcons':'ATL', 'Green Bay Packers':'GB', 'New York Jets':'NYJ', 'Washington Redskins':'WAS', 'Arizona Cardinals':'ARI', 'Detroit Lions':'DET', 'San Francisco 49ers':'SF', 'New York Giants':'NYG', 'Miami Dolphins':'MIA', 'Tampa Bay Buccaneers':'TB', 'Cincinnati Bengals':'CIN', 'Oakland Raiders':'OAK'}
 
 
 	historical = {}
 	for ps in fp_urls:
 		if ps != 'FLEX':
-			historical[ps] = GetHistory(ps)
+			# historical[ps] = GetHistory(ps)
+			historical[ps] = GetHistoryFromUSB(ps)
 
 	fant_pros = {}
+	ros_rks = {}
 	positional = {}
 	#add rankings
 	for p in fp_urls:
-		# print(p,fp_urls[p])
-		# num_p = len(positional[p])
-		fant_pros[p] = pd.read_html(fp_urls[p])[0]
-		# fant_pros[p].drop(0,inplace = True)
+		try:
+			fant_pros[p] = pd.read_pickle('leagueinfo/' + p +'.ecr')
+		except:
+			download_info(scoring)
+			fant_pros[p] = pd.read_pickle('leagueinfo/' + p +'.ecr')
+
+		try:
+			ros_temp = pd.read_pickle('leagueinfo/'+p+'.ros')
+		except:
+			download_info(scoring)
+			ros_temp = pd.read_pickle('leagueinfo/'+p+'.ros')
+
 		fant_pros[p].drop('WSIS', axis = 1, inplace = True)
 		fant_pros[p].rename(columns = {fant_pros[p].columns[1]:'Name',fant_pros[p].columns[0]:'Rank'}, inplace = True)#
 		fant_pros[p].drop([col for col in fant_pros[p].columns if "Unnamed" in col], axis = 1, inplace = True)
 		#
-		# fant_pros[p].drop(columns = [col for col in fant_pros[p].columns if 'Unnamed' in col], inplace = True)
 		fant_pros[p].dropna(inplace = True)
 		fant_pros[p].drop(index = [indd for indd in fant_pros[p].index if 'google' in fant_pros[p].loc[indd,'Opp']], inplace = True)
 		#
-		player_names_fmted = [(ind,fant_pros[p].Name.loc[ind].split(' ')[0] + ' ' + fant_pros[p].Name.loc[ind].split(' ')[-2],fant_pros[p].Name.loc[ind].split(' ')[-1]) for ind in fant_pros[p].index if '(' not in fant_pros[p].Name.loc[ind].split(' ')[-2]] + [(ind,fant_pros[p].Name.loc[ind].split('(')[1].split(')')[0],fant_pros[p].Name.loc[ind].split('(')[1].split(')')[0]) for ind in fant_pros[p].index if '(' in fant_pros[p].Name.loc[ind]]
 
 
-		fant_pros[p].loc[:,"FixedName"] = [pl[1] for pl in player_names_fmted]
-		fant_pros[p].loc[:,"Team"]=[pl[2] for pl in player_names_fmted]
+		player_names_fmted2 = [(ind,fant_pros[p].Name.loc[ind].split(' ')[0] + ' ' + fant_pros[p].Name.loc[ind].split(' ')[-2],fant_pros[p].Name.loc[ind].split(' ')[-1]) for ind in fant_pros[p].index if '(' not in fant_pros[p].Name.loc[ind].split(' ')[-2]] + [(ind,fant_pros[p].Name.loc[ind].split('(')[1].split(')')[0],fant_pros[p].Name.loc[ind].split('(')[1].split(')')[0]) for ind in fant_pros[p].index if '(' in fant_pros[p].Name.loc[ind]]
+
+		player_names = ros_temp.iloc[:,2]
+		player_names.dropna(inplace = True)
+		player_names.drop(index = [indd for indd in player_names.index if 'google' in player_names.loc[indd]], inplace = True)
+
+
+		player_names_fmted = [(ind,player_names.loc[ind].split(' ')[0] + ' ' + player_names.loc[ind].split(' ')[-2],player_names.loc[ind].split(' ')[-1]) for ind in player_names.index if '(' not in player_names.loc[ind].split(' ')[-2]] + [(ind,player_names.loc[ind].split('(')[1].split(')')[0],player_names.loc[ind].split('(')[1].split(')')[0]) for ind in player_names.index if '(' in player_names.loc[ind]]
+
+
+
+		fant_pros[p].loc[:,"FixedName"] = [pl[1] for pl in player_names_fmted2]
+		fant_pros[p].loc[:,"Team"]=[pl[2] for pl in player_names_fmted2]
 
 		positional[p] = pd.DataFrame(index = [pl[1]+" - " + pl[2] for pl in player_names_fmted])
-		fant_pros[p].index = [pl[1]+" - " + pl[2] for pl in player_names_fmted]
+		fant_pros[p].index = [pl[1]+" - " + pl[2] for pl in player_names_fmted2]
 
 
-		#
-		# fant_pros[p].loc[invert([isinstance(n,str) for n in fant_pros[p].Notes]),'Notes'] = [''] * len(fant_pros[p].loc[invert([isinstance(n,str) for n in fant_pros[p].Notes]),'Notes'])
-		# longest_note = max([len(note) for note in fant_pros[p].Notes[invert([isnan(ente) for ente in fant_pros[p].Notes.str.contains('')])]])
-		# positional[p]['FP_Notes'] = [' '*longest_note]*num_p
+		ros_rks[p] = ros_temp
+		num_po = len(ros_rks[p])
+		ros_rks[p].drop(ros_rks[p].columns[1],axis = 1, inplace = True)
+		ros_rks[p].rename(columns = {ros_rks[p].columns[1]:'Name',ros_rks[p].columns[0]:'Rank'}, inplace = True)
+		ros_rks[p].Name = ros_rks[p].Name.astype(str)
+		ros_rks[p] = ros_rks[p][invert(ros_rks[p].Name == 'nan')]
+
+
+		ros_rks[p].drop(index = [indd for indd in ros_rks[p].index if 'google' in str(ros_rks[p].loc[indd,'Rank'])], inplace = True)
+
+		# if p != 'DST':
+		# 	names = [nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in ros_rks[p].loc[:,'Name']]
+		# else:
+		# 	names = [nm.split(')')[1].split(' ')[0] + ' - '+nm.split(')')[1].split(' ')[0] for nm in ros_rks[p].loc[:,'Name']]
+		ros_rks[p].index =  [pl[1]+" - " + pl[2] for pl in player_names_fmted]
+		ros_rks[p].drop('Name', axis = 1, inplace = True)
+
+
+
 		for ply in positional[p].index:
-			fp_row = fant_pros[p].loc[ply]
-			if len(fp_row)>0:
+			ros_row = ros_rks[p].loc[ply]
+			if ply in fant_pros[p].index:
+				fp_row = fant_pros[p].loc[ply]
 				positional[p].loc[ply,'Name'] = fp_row['FixedName']
 				positional[p].loc[ply,'Team'] = fp_row['Team']
-				positional[p].loc[ply,'Pos.'] = p
+				if p != 'FLEX':
+					positional[p].loc[ply,'Pos.'] = p
+				else:
+					positional[p].loc[ply,'Pos.'] = ''.join([l for l in fp_row['Pos'] if not l.isdigit()])
 				positional[p].loc[ply,'Avg'] = float(fp_row['Avg'])#.astype(float)
 				positional[p].loc[ply,'Best'] = float(fp_row['Best'])#.astype(float)
 				positional[p].loc[ply,'Worst'] = float(fp_row['Worst'])#.astype(float)
@@ -132,6 +448,37 @@ def initialize_league(scoring):
 				else:
 					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+ply+"+defense+fantasy"
 
+			else:
+				positional[p].loc[ply,'Name'] = ply.split(' - ')[0]#fp_row['FixedName']
+				positional[p].loc[ply,'Team'] = ply.split(' - ')[1]
+				if p != 'FLEX':
+					positional[p].loc[ply,'Pos.'] = p
+				else:
+					positional[p].loc[ply,'Pos.'] = ''.join([l for l in ros_row['Pos'] if not l.isdigit()])
+				positional[p].loc[ply,'Avg'] = 1000#float(ros_rks['Avg'])#.astype(float)
+				positional[p].loc[ply,'Best'] = 1000#float(ros_rks['Best'])#.astype(float)
+				positional[p].loc[ply,'Worst'] = 1000#float(ros_rks['Worst'])#.astype(float)
+				positional[p].loc[ply,'Std_Dev'] = 0#float(ros_rks['Std Dev'])#.astype(float)
+				positional[p].loc[ply,'Opp'] = 'BYE'#ros_rks['Opp']
+				if p != "DST":
+					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+"+".join(ply.lower().split(" ")[:-1])+"+fantasy"
+				else:
+					positional[p].loc[ply,'Info'] = "http://www.google.com/search?q="+ply+"+defense+fantasy"
+
+
+		#
+		# for nm in positional[p].index:
+		# 	# if nm in ros_rks[p].index:
+
+			positional[p].loc[ply,'ROS_Avg'] = float(ros_row['Avg'])#.values.astype(float)
+			positional[p].loc[ply,'ROS_Best'] = float(ros_row['Best'])#.values.astype(float)
+			positional[p].loc[ply,'ROS_Worst'] = float(ros_row['Worst'])#.values.astype(float)
+			positional[p].loc[ply,'ROS_Std'] = float(ros_row['Std Dev'])#.values.astype(float)
+			# else:
+			# 	positional[p].loc[nm,'ROS_Avg'] = num_po
+			# 	positional[p].loc[nm,'ROS_Best'] = num_po
+			# 	positional[p].loc[nm,'ROS_Worst'] = num_po
+			# 	positional[p].loc[nm,'ROS_Std'] = num_po
 
 
 	match_urls = {'QB':"https://www.fantasypros.com/nfl/matchups/qb.php",
@@ -144,66 +491,50 @@ def initialize_league(scoring):
 	##			with higer number meaning more difficult, according to fantasy pros.
 	matchups = {}
 	for p in match_urls:
-		matchups[p] = pd.read_html(match_urls[p])[0]
+		try:
+			matchups[p] = pd.read_pickle('leagueinfo/'+p+'.matchups')
+		except:
+			download_info(scoring)
+			matchups[p] = pd.read_pickle('leagueinfo/'+p+'.matchups')
 		for i in matchups[p]:
 			matchups[p].loc[:,i] = matchups[p].loc[:,i].astype(str)
 		matchups[p].Player = matchups[p].Player.astype(str)
 		if p != 'DST':
 			names = [nm.split(' ')[0] + ' '+nm.split(' ')[1] + ' - '+nm.split(' ')[-1] for nm in matchups[p].Player]
 		else:
-			names =  [dst_teams[nm] for nm in matchups[p].Player]
+			names =  [dst_teams[nm] + ' - ' + dst_teams[nm] for nm in matchups[p].Player]
 		matchups[p].index = names
 		matchups[p].drop('Player',axis = 1, inplace = True)
 
 	matchups['FLEX'] = pd.concat([matchups[p] for p in ['WR','RB','TE']])
 
 
-	ros_urls = {'QB':"https://www.fantasypros.com/nfl/rankings/ros-qb.php",'RB': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"rb.php",'WR': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"wr.php",'TE': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"te.php",'FLEX':"https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"flex.php",'DST': "https://www.fantasypros.com/nfl/rankings/ros-dst.php",'K':"https://www.fantasypros.com/nfl/rankings/ros-k.php"}
+	# ros_urls = {'QB':"https://www.fantasypros.com/nfl/rankings/ros-qb.php",'RB': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"rb.php",'WR': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"wr.php",'TE': "https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"te.php",'FLEX':"https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"flex.php",'DST': "https://www.fantasypros.com/nfl/rankings/ros-dst.php",'K':"https://www.fantasypros.com/nfl/rankings/ros-k.php"}
 	#
-	ros_rks = {}
+	#
+	#
+	# for p in ros_urls:
+	#
 
-	for p in ros_urls:
-		ros_temp = pd.read_html(ros_urls[p])[0]
-		if len(ros_temp) >1:
-			ros_rks[p] = ros_temp
-			num_po = len(ros_rks[p])
-			ros_rks[p].drop(ros_rks[p].columns[1],axis = 1, inplace = True)
-			ros_rks[p].rename(columns = {ros_rks[p].columns[1]:'Name',ros_rks[p].columns[0]:'Rank'}, inplace = True)
-			ros_rks[p].Name = ros_rks[p].Name.astype(str)
-			ros_rks[p] = ros_rks[p][invert(ros_rks[p].Name == 'nan')]
-			if p != 'DST':
-				names = [nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in ros_rks[p].loc[:,'Name']]
-			else:
-				names = [nm.split(')')[1].split(' ')[0] for nm in ros_rks[p].loc[:,'Name']]
-			ros_rks[p].index = names
-			ros_rks[p].drop('Name', axis = 1, inplace = True)
-			for nm in positional[p].index:
-				if nm in ros_rks[p].index:
-					ros_row = ros_rks[p].loc[nm]
-					positional[p].loc[nm,'ROS_Avg'] = float(ros_row['Avg'])#.values.astype(float)
-					positional[p].loc[nm,'ROS_Best'] = float(ros_row['Best'])#.values.astype(float)
-					positional[p].loc[nm,'ROS_Worst'] = float(ros_row['Worst'])#.values.astype(float)
-					positional[p].loc[nm,'ROS_Std'] = float(ros_row['Std Dev'])#.values.astype(float)
-				else:
-					positional[p].loc[nm,'ROS_Avg'] = num_po
-					positional[p].loc[nm,'ROS_Best'] = num_po
-					positional[p].loc[nm,'ROS_Worst'] = num_po
-					positional[p].loc[nm,'ROS_Std'] = num_po
 
 
 	player_list = pd.concat([positional[p] for p in positional.keys() if p != "FLEX"])
 
-
-	ros_overall = pd.read_html("https://www.fantasypros.com/nfl/rankings/ros-"+url_1+"overall.php")[0]
+	try:
+		ros_overall = pd.read_pickle('leagueinfo/overall.ros')
+	except:
+		download_info(scoring)
+		ros_overall = pd.read_pickle('leagueinfo/overall.ros')
 	ros_overall.drop(ros_overall.columns[1],axis=1,inplace = True)
 	ros_overall.rename(columns = {ros_overall.columns[1]:'Name',ros_overall.columns[0]:'Rank'}, inplace = True)
 	ros_overall = ros_overall[invert([isnan(nm) for nm in ros_overall.Name.str.contains('')])]
 
 	names = array([nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in ros_overall.loc[:,'Name']])
 	defs = array(ros_overall[ros_overall.Pos.str.contains('DST')].index)
-	names[defs] = [nm.split(')')[1].split(' ')[0] for nm in ros_overall.loc[defs,'Name']]
-	# tms =[nm[nm.rfind(' ')+1:] if nm.rfind(' ') != -1 else nm for nm in ros_overall[ros_overall.Pos.str.contains('DST')].Name]
-	# names[defs -1] = tms
+	names[defs] = [nm.split(')')[1].split(' ')[0] + ' - ' + nm.split(')')[1].split(' ')[0] for nm in ros_overall.loc[defs,'Name']]
+
+
+	player_list = player_list.loc[~player_list.index.duplicated(keep='first')]
 
 	ros_overall.index = names
 	for nm in player_list.index:
@@ -219,6 +550,7 @@ def initialize_league(scoring):
 			player_list.loc[nm,'ROS_Best_ov'] = num_po
 			player_list.loc[nm,'ROS_Worst_ov'] = num_po
 			player_list.loc[nm,'ROS_Std_ov'] = num_po
+
 	#
 	#
 	#
@@ -241,43 +573,54 @@ def initialize_league(scoring):
 	snap_counts = dict()
 	snap_count_perc = dict()
 	for p in snap_count_urls:
-		snap_counts[p] = pd.read_html(snap_count_urls[p])[0]
+		try:
+			snap_counts[p] = pd.read_pickle('leagueinfo/'+ p + '.snc')
+		except:
+			download_info(scoring)
+			snap_counts[p] = pd.read_pickle('leagueinfo/'+ p + '.snc')
 		snap_counts[p].Player = snap_counts[p].Player.astype(str)
 		names = array([nm[:nm.rfind('.')-1] if nm.rfind('.')!= -1 else nm[:nm.rfind(')')+1] for nm in snap_counts[p].loc[:,'Player']])
-		# names = array([nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in snap_counts[p].loc[:,'Player']])
 		snap_counts[p].index = [names[i] + ' - ' + snap_counts[p].loc[i,'Team'] for i in range(len(names))]
 		snap_counts[p].drop('Player',axis = 1, inplace = True)
 
 	for p in snap_count_perc_urls:
-		snap_count_perc[p] = pd.read_html(snap_count_perc_urls[p])[0]
+		try:
+			snap_count_perc[p] = pd.read_pickle('leagueinfo/'+ p + '.snp')
+		except:
+			download_info(scoring)
+			snap_count_perc[p] = pd.read_pickle('leagueinfo/'+ p + '.snp')
 		snap_count_perc[p].Player = snap_count_perc[p].Player.astype(str)
 		names = array([nm[:nm.rfind('.')-1] if nm.rfind('.')!= -1 else nm[:nm.rfind(')')+1] for nm in snap_count_perc[p].loc[:,'Player']])
-		# names = array([nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in snap_count_perc[p].loc[:,'Player']])
 		snap_count_perc[p].index = [names[i] + ' - ' + snap_count_perc[p].loc[i,'Team'] for i in range(len(names))]
 		snap_count_perc[p].drop('Player',axis = 1, inplace = True)
 	#
-	### Columns are: ['Player', 'Team', 'Games', 'Snaps', 'Snaps/Gm', 'Snap %', 'Rush %',
-	##							'Tgt %', 'Touch %', 'Util %', 'Fantasy Pts', 'Pts/100 Snaps']
-	# Util % is "% of snaps the player touched the ball or was targeted, includes pass attempts, rush attempts, and receptions"
+
 	snap_analysis = dict()
 	for p in snap_analysis_urls:
-		snap_analysis[p] = pd.read_html(snap_analysis_urls[p])[0]
+		try:
+			snap_analysis[p] = pd.read_pickle('leagueinfo/'+ p + '.sna')
+		except:
+			download_info(scoring)
+			snap_analysis[p] = pd.read_pickle('leagueinfo/'+ p + '.sna')
 		snap_analysis[p].Player = snap_analysis[p].Player.astype(str)
 		names = [nm[:nm.find(' ',nm.find(' ')+1)] if nm.find(' ',nm.find(' ')+1) != -1 else nm for nm in snap_analysis[p].Player]
-		# names = [nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in snap_analysis[p].loc[:,'Player']]
 		snap_analysis[p].index = [names[i] + ' - ' + snap_analysis[p].loc[i,'Team'] for i in range(len(names))]
 		snap_analysis[p].drop('Player',axis = 1, inplace = True)
 
 	snap_analysis['FLEX'] = pd.concat([snap_analysis[p] for p in ['WR','RB','TE']])
 	#
 	targets_urls = {'RB': "https://www.fantasypros.com/nfl/reports/targets/rb.php",'WR': "https://www.fantasypros.com/nfl/reports/targets/wr.php",'TE': "https://www.fantasypros.com/nfl/reports/targets/te.php"}
-	### Name of player in "Player" column, targets for week N in columns "N", total in "TTL", average in "AVG"
 	targets = dict()
 	for p in targets_urls:
-		targets[p] = pd.read_html(targets_urls[p])[0]
+
+		try:
+			targets[p] = pd.read_pickle('leagueinfo/'+ p + '.targets')
+		except:
+			download_info(scoring)
+			targets[p] = pd.read_pickle('leagueinfo/'+ p + '.targets')
+
 		targets[p].Player = targets[p].Player.astype(str)
 		names = [nm[:nm.find(' ',nm.find(' ')+1)] if nm.find(' ',nm.find(' ')+1) != -1 else nm for nm in targets[p].Player]
-		# names = [nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in targets[p].loc[:,'Player']]
 		targets[p].index = [names[i] + ' - ' + targets[p].loc[i,'Team'] for i in range(len(names))]
 		targets[p].drop('Player',axis = 1, inplace = True)
 
@@ -286,60 +629,154 @@ def initialize_league(scoring):
 	for p in targets.keys():
 		targets[p].drop_duplicates(inplace = True)
 
-	kicker_stats = pd.read_html("https://www.fantasypros.com/nfl/stats/k.php")[0]
+	try:
+		kicker_stats = pd.read_pickle('leagueinfo/kicker.stats')
+	except:
+		download_info(scoring)
+		kicker_stats = pd.read_pickle('leagueinfo/kicker.stats')
+
 	kicker_names = [nm[:nm.find(' ',nm.find(' ')+1)] if nm.find(' ',nm.find(' ')+1) != -1 else nm for nm in kicker_stats.Player]
-	# kicker_names = [nm.split(' ')[0] + ' '+nm.split(' ')[1][:-2] + ' - '+nm.split(' ')[-1] for nm in kicker_stats.loc[:,'Player']]
-	# print(kicker_stats)
 	kicker_teams = [tm[tm.find('(')+1:tm.find(')')] for tm in kicker_stats.Player]
 	kicker_stats.index =  [kicker_names[i] + ' - ' + kicker_teams[i] for i in range(len(kicker_names))]
 	kicker_stats['Player'] = kicker_teams
 	kicker_stats.rename(columns = {'Player':'Team'}, inplace = True)
 
-	defense_stats = pd.read_html("https://www.fantasypros.com/nfl/stats/dst.php")[0]
-	# print(defense_stats.loc[:,'Player'])
-	# print([nm.split('(')[1].split(')')[0] for nm in defense_stats.loc[:,'Player']])
-	defense_stats.index = [nm.split('(')[1].split(')')[0] for nm in defense_stats.loc[:,'Player']]
+	try:
+		defense_stats = pd.read_pickle('leagueinfo/dst.stats')
+	except:
+		download_info(scoring)
+		defense_stats = pd.read_pickle('leagueinfo/dst.stats')
 
-	#
-	#
-	#
-	# ### May try to use weather data
-	# ###
+	defense_stats.index = [nm.split('(')[1].split(')')[0]+' - '+nm.split('(')[1].split(')')[0]for nm in defense_stats.loc[:,'Player']]
+
+
+
+
+########################
+	for p in positional:
+		for ply in positional[p].index:
+			pp = positional[p].loc[ply,'Pos.']#in case of flex!
+			rkkk = min(int(positional[pp].loc[ply,'Avg']) -1,len(historical[pp][1]) - 1)
+			rkkk2 = min(int(positional[pp].loc[ply,'ROS_Avg']) -1,len(historical[pp][1]) - 1)
+			positional[p].loc[ply,'Wk_FP_Pred'] = historical[pp][1][rkkk]
+			positional[p].loc[ply,'ROS_FP_Pred'] = historical[pp][1][rkkk2]
+			if ply in matchups[pp].index:
+				mtch = matchups[pp].loc[ply,str(week)]
+				if mtch != 'nan':
+					if mtch != 'BYE':
+						if positional[p].loc[ply,'Opp'] != 'BYE/HURT':
+							positional[p].loc[ply,'Weekly Matchup Rank'] = ''.join([d for d in mtch if d.isdigit()])
+						else:
+							positional[p].loc[ply,'Weekly Matchup Rank'] = 129
+					else:
+						positional[p].loc[ply,'Weekly Matchup Rank'] = 129
+					rosmtch = matchups[pp].loc[ply,[str(i) for i in range(week,18)]]
+					rosmtch_nums = [float(''.join([d for d in st if d.isdigit()])) for st in rosmtch if st != 'BYE']
+					positional[p].loc[ply,'ROS Matchup Rank'] = mean(rosmtch_nums)
+				else:
+					positional[p].loc[ply,'Weekly Matchup Rank'] = 129
+					positional[p].loc[ply,'ROS Matchup Rank'] = 129
+
+			else:
+				positional[p].loc[ply,'Weekly Matchup Rank'] = 129
+				positional[p].loc[ply,'ROS Matchup Rank'] = 129
+			if pp not in ['K','DST']:
+				if ply in snap_analysis[pp].index:
+					positional[p].loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
+					positional[p].loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
+					positional[p].loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
+					positional[p].loc[ply,'Use %'] = positional[p].loc[ply,'Snap %']*positional[p].loc[ply,'Utility %']
+					if p != 'QB':
+						if ply in targets[pp].index:
+							positional[p].loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
+							stscr_wk = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'Use %']*positional[p].loc[ply,'Avg Targets']*(((32-float(positional[p].loc[ply,'Weekly Matchup Rank']))/32)*(1/2)+(1/2))
+							stscr_ros = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'Use %']*positional[p].loc[ply,'Avg Targets']*(((32-float(positional[p].loc[ply,'ROS Matchup Rank']))/32)*(1/2)+(1/2))
+					else:
+						stscr_wk = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'Use %']*(((32-float(positional[p].loc[ply,'Weekly Matchup Rank']))/32)*(1/2)+(1/2))
+						stscr_ros = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'Use %']*(((32-float(positional[p].loc[ply,'ROS Matchup Rank']))/32)*(1/2)+(1/2))
+					positional[p].loc[ply,'Weekly Stat Score'] = stscr_wk
+					positional[p].loc[ply,'ROS Stat Score'] = stscr_ros
+				else:
+					positional[p].loc[ply,'Weekly Stat Score'] = 0
+					positional[p].loc[ply,'ROS Stat Score'] = 0
+			elif p == 'K':
+				if ply in kicker_stats.index:
+					positional[p].loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
+					positional[p].loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
+					positional[p].loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
+					stscr_wk = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'FGA']*positional[p].loc[ply,'PCT']*(((32-float(positional[p].loc[ply,'Weekly Matchup Rank']))/32)*(1/2)+(1/2))
+					stscr_ros = positional[p].loc[ply,'FP/G']*positional[p].loc[ply,'FGA']*positional[p].loc[ply,'PCT']*(((32-float(positional[p].loc[ply,'ROS Matchup Rank']))/32)*(1/2)+(1/2))
+					positional[p].loc[ply, 'Weekly Stat Score'] = stscr_wk
+					positional[p].loc[ply, 'ROS Stat Score'] = stscr_ros
+				else:
+					positional[p].loc[ply,'Weekly Stat Score'] = 0
+					positional[p].loc[ply,'ROS Stat Score'] = 0
+			elif p == 'DST':
+				if ply in defense_stats.index:
+					positional[p].loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
+					positional[p].loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
+					stscr_wk = (((32-float(positional[p].loc[ply,'Weekly Matchup Rank']))/32)*(1/2)+(1/2))*positional[p].loc[ply,'FP/G']
+					stscr_ros = (((32-float(positional[p].loc[ply,'ROS Matchup Rank']))/32)*(1/2)+(1/2))*positional[p].loc[ply,'FP/G']
+					positional[p].loc[ply, 'Weekly Stat Score'] = stscr_wk
+					positional[p].loc[ply, 'ROS Stat Score'] = stscr_ros
+				else:
+					positional[p].loc[ply,'Weekly Stat Score'] = 0
+					positional[p].loc[ply,'ROS Stat Score'] = 0
+
+	posdatadists = {}
+	for pp in ['QB','RB','WR','TE','K','DST']:
+		posdatadists[pp] = np.load('leagueinfo/'+pp+'distribution.npy').astype(float)
+
+	for p in positional:
+		# posdist = np.load('leagueinfo/'+p+'.distribution')
+		for ply in positional[p].index:
+			pp = positional[p].loc[ply,'Pos.']#in case of flex!
+			wkstmax = max(positional[pp].loc[:,'Weekly Stat Score'])
+			rosstmax = max(positional[pp].loc[:,'ROS Stat Score'])
+			qw = 0.8 - (week-1)*(0.6/16)
+			# wk_scal = (positional[p].loc[ply,'Weekly Stat Score']/wkstmax)*(1-qw) + qw
+			# ros_scal = (positional[p].loc[ply,'ROS Stat Score']/wkstmax)*(1-qw) + qw
+			# positional[p].loc[ply,'Weekly Final'] = wk_scal*positional[p].loc[ply,'Wk_FP_Pred']
+			# positional[p].loc[ply,'ROS Final'] = ros_scal*positional[p].loc[ply,'ROS_FP_Pred']
+
+			wk_scal = 1 - (positional[p].loc[ply,'Weekly Stat Score']/wkstmax)*(1-qw)
+			ros_scal = 1 - (positional[p].loc[ply,'ROS Stat Score']/wkstmax)*(1-qw)
+
+			wk_rank,wk_score = estimate_score(positional[p].loc[ply,'Avg'],positional[p].loc[ply,'Std_Dev'],wk_scal,posdatadists[pp],len(positional[p]))
+			ros_rank,ros_score = estimate_score(positional[p].loc[ply,'ROS_Avg'],positional[p].loc[ply,'ROS_Std'],ros_scal,posdatadists[pp],len(positional[p]))
+
+			positional[p].loc[ply,'Weekly Final'] = wk_score
+			positional[p].loc[ply,'ROS Final'] = ros_score
+
+			positional[p].loc[ply,'Weekly Stat Scale'] = wk_scal
+			positional[p].loc[ply,'ROS Stat Scale'] = ros_scal
+
+
+			# positional[p].loc[ply,'Weekly Rank Est'] = wk_rank
+			# positional[p].loc[ply,'ROS Rank Est'] = ros_rank
+
+
 	#
 	# #################### Rosters ##############################
 	#
 	#
-	raw_rosters = pd.read_html("https://football.fantasysports.yahoo.com/f1/342679/starters")[1:]
-	teams = ['Ryan', 'Vince', 'Nathan', 'Nick', 'Arthur', 'Jim', 'Dylan', 'Connor', 'Lucas', 'Shayne']
-	rosters = dict()
-	for i in range(len(teams)):
-		the_rost = raw_rosters[i].copy()
-		# print(the_rost.loc[:,'Player'])
-		the_rost['Pos'] = ['    ']*len(the_rost)
-		for ii in the_rost.index:
-			if 'DEF' in the_rost.loc[ii,'Player']:
-				for tm in positional['DST']['Team']:
-					if tm.lower() in str(the_rost.loc[ii,'Player']).lower():
-						the_rost.loc[ii,'Player'] = positional['DST'].index[positional['DST']['Team']==tm][0]
-						the_rost.loc[ii,'Pos'] = 'DST'
-			else:
-				for pl in player_list.index:
-					if player_list.loc[pl,'Pos.'] != 'DST':
-						plnm = pl.split(' - ')[0]
-						pltm = pl.split(' - ')[1]
-						if pltm == 'JAC':
-							pltm = 'JAX'
-						if plnm.split(' ')[0] in the_rost.loc[ii, 'Player'] and plnm.split(' ')[1] in the_rost.loc[ii, 'Player'] and pltm in the_rost.loc[ii, 'Player'].upper():
-							the_rost.loc[ii,'Player'] = pl
-							the_rost.loc[ii,'Pos'] = player_list[player_list['Pos.'] != 'FLEX'].loc[pl, 'Pos.']
-		rosters[teams[i]] = the_rost
+	# raw_rosters = pd.read_html(league_URL)[1:]
+	# teams = ['Ryan', 'Vince', 'Nathan', 'Nick', 'Arthur', 'Jim', 'Dylan', 'Connor', 'Lucas', 'Shayne']
 
+	if site == "yahoo":
+		rosters = make_rosters_from_yahoo(league_URL,positional,player_list,teams)
+	elif site == "espn":
+		rosters = make_rosters_from_espn(league_URL,yourswid,yourespn_s2,teams)
+
+
+	# for ros in rosters:
+	# 	print(rosters[ros])
 	#
-	taken_players = pd.DataFrame(columns = ['Pos', 'Player', 'FTeam'])
+	taken_players = pd.DataFrame(columns = ['Pos.', 'Player', 'FTeam'])
 	for tm in rosters:
 		temp_ros = pd.DataFrame(rosters[tm])
 		temp_ros['FTeam'] = [tm]*len(temp_ros)
-		taken_players = pd.concat([taken_players, temp_ros])
+		taken_players = pd.concat([taken_players, temp_ros],sort = True)
 
 	taken_players = taken_players[taken_players.Player != '(Empty)']
 	taken_players.index = taken_players.Player
@@ -361,167 +798,183 @@ def initialize_league(scoring):
 
 
 	for nm in taken_players.index:
-		if "Note" in nm:
+		if " Note " in nm:
 			taken_players.drop(nm,inplace = True)
 
 
 
-
-	#make google search links clickable
-	# player_list = player_list.style.format({'Info': make_clickable})
-	# available_players = available_players.style.format({'Info': make_clickable})
-	# for p in positional:
-	# 	positional[p] = positional[p].style.format({'Info': make_clickable})
-	# 	available_positional[p] = available_positional[p].style.format({'Info': make_clickable})
-
 	return [player_list, positional, fant_pros,matchups, snap_analysis,targets, defense_stats,kicker_stats, taken_players, available_players, available_positional,rosters,historical]
 
+
+# def nchooser(n,r):
+#
+# 	if n>=r:
+#
+# 		if n >0 and r >0:
+# 			nfact = prod([n-i for i in range(n)])
+# 			rfact = prod([r-i for i in range(r)])
+# 			nmrfact = prod([n-r-i for i in range(n-r)])
+# 			ch = nfact/(rfact*nmrfact)
+# 		else:
+# 			ch = 1
+#
+# 	else:
+#
+# 		ch =0
+#
+#
+# 	return ch
+#
+# def choose_lineup(roster, positions):
+# 	'''Roster should be a dataframe of players to consider
+# 	with
+# 	'Avg','Std_Dev','Stat Scale','Pos.'
+# 	player scores are sampled with
+# 	estimate_score(Avg,Std_Dev,Stat Scale,Pos.,numtrials =1000)
+# 	'''
+#
+# 	###we need to enumerate the possible lineups
+#
+# 	n_QB = sum(roster.loc[:,'Pos.'] == 'QB')
+# 	n_RB = sum(roster.loc[:,'Pos.'] == 'RB')
+# 	n_WR = sum(roster.loc[:,'Pos.'] == 'WR')
+# 	n_TE = sum(roster.loc[:,'Pos.'] == 'TE')
+# 	n_DST = sum(roster.loc[:,'Pos.'] == 'DST')
+# 	n_K = sum(roster.loc[:,'Pos.'] == 'K')
+#
+# 	total_rosters = nchooser(n_QB,positions['QB'])*nchooser(n_RB,positions['RB'])*nchooser(n_WR,positions['WR'])*nchooser(n_TE,positions['TE'])*nchooser(n_K,positions['K'])*nchooser(n_DST,positions['DST'])*nchooser(n_RB+n_WR+n_TE - (positions['RB']+positions['WR']+positions['TE']),positions['FLEX'])*nchooser(n_QB+n_RB+n_WR+n_TE - (positions['QB'] + positions['RB']+positions['WR']+positions['TE']),positions['SUPERFLEX'])
+#
+# 	if total_rosters == 0:
+# 		print("Not enough players to fill roster.")
+# 		return None
+#
+# 	qbs = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'QB'].index]
+# 	rbs = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'RB'].index]
+# 	wrs = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'WR'].index]
+# 	tes = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'TE'].index]
+# 	dsts = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'DST'].index]
+# 	ks = [(nm,[]) for nm in roster[roster.loc[:,'Pos.'] == 'K'].index]
+#
+# 	qba = np.linspace(0,total_rosters,n_QB + 1)
+# 	qbb = [list(range(int(qba[i]),int(qba[i+1]))) for i in range(len(qba)-1)]
+# 	for i in range(len(qbs)):
+# 		gbs[i][1] += qbb[i]
+#
+#
+#
+#
+#
+#
+# 	return None
+
+
+
+
+
 ##### Management functions
-def this_week(week,available_positional,positional,matchups,snap_analysis,targets,kicker_stats,defense_stats,rost,positions,history):#, retu = False):
+def this_week(available_positional,positional,rost,positions):
 	'''Decide who to start/sit this week from a roster, and identify any potential available streamers'''
-	# if len(pos) == 0:
-	outof = 40
 	pos = [ps for ps in positions.keys() if ps != 'BENCH']
 	lineup = dict()
 	streamers = dict()
-	score_by_rk = dict()
 	for p in [ps for ps in pos if ((ps != 'SUPERFLEX') and (ps != 'FLEX'))]:
-		# if p != 'FLEX':
-		on_ros = pd.DataFrame(rost[rost.Pos == p])
-		score_by_rk[p] = history[p][1]#GetHistory(p)[1]
-		# else:
-		# 	on_ros = pd.DataFrame(rost[[r in ['RB','WR','TE'] for r in rost.Pos]])
+		on_ros = pd.DataFrame(rost[rost.loc[:,'Pos'] == p])
+
 		on_ros.index = on_ros.Player
 		strm = pd.DataFrame(available_positional[p][available_positional[p].Opp != ''])
-		for ind in strm.index:
-			strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
+		# for ind in strm.index:
+		# 	strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
 		for ply in on_ros.index:
-			pp = on_ros.loc[ply,'Pos'] #in case we are in the flex position
+			# on_ros.loc[ply,'Pos.'] = p
 			if ply in positional[p].index:
 				on_ros.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
-				on_ros.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg']) -1]
+				on_ros.loc[ply,'FP_Pred'] = positional[p].loc[ply,'Wk_FP_Pred']
 				on_ros.loc[ply,'Best'] = positional[p].loc[ply,'Best']
 				on_ros.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
+				on_ros.loc[ply,'Std_Dev'] = positional[p].loc[ply,'Std_Dev']
 				on_ros.loc[ply,'Ceiling'] = on_ros.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
 				on_ros.loc[ply,'Info'] = positional[p].loc[ply,'Info']
 				if positional[p].loc[ply,'Opp'] != '':
 					on_ros.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
 				else:
 					on_ros.loc[ply,'Opp'] = 'BYE/HURT'
-			if ply in matchups[pp].index:
-				mtch = matchups[pp].loc[ply,str(week)]
-				if mtch != 'nan':
-					if mtch != 'BYE':
-						# if p == 'DST':
-						# 	print(on_ros)
-						if on_ros.loc[ply,'Opp'] != 'BYE/HURT':
-							on_ros.loc[ply,'Matchup Rank'] = mtch.replace(on_ros.loc[ply,'Opp'], '')
-						else:
-							numbers = where([car.isdigit() for car in mtch])[0]
-							if len(numbers)>1:
-								on_ros.loc[ply,'Matchup Rank'] = mtch[numbers[0]:numbers[1]+1]
-							else:
-								on_ros.loc[ply,'Matchup Rank'] = mtch[numbers[0]:numbers[0]+1]
-					else:
-						on_ros.loc[ply,'Matchup Rank'] = 129
-			else:
-				on_ros.loc[ply,'Matchup Rank'] = 129
+				on_ros.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'Weekly Matchup Rank']
+
 			if p not in ['K','DST']:
-				if ply in snap_analysis[pp].index:
-					on_ros.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
-					on_ros.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
-					on_ros.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
-					on_ros.loc[ply,'Use %'] = on_ros.loc[ply,'Snap %']*on_ros.loc[ply,'Utility %']
-					if p != 'QB':
-						if ply in targets[pp].index:
-							on_ros.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
-							stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*on_ros.loc[ply,'Avg Targets']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					else:
-						stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					on_ros.loc[ply,'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+				on_ros.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+				on_ros.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+				if p != 'QB':
+					on_ros.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
+
 			elif p == 'K':
-				if ply in kicker_stats.index:
-					on_ros.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
-					on_ros.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
-					on_ros.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
-					stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'FGA']*on_ros.loc[ply,'PCT']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					on_ros.loc[ply, 'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+				on_ros.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
 			elif p == 'DST':
-				if ply in defense_stats.index:
-					on_ros.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
-					on_ros.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
-					stscr = (32+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*2)*on_ros.loc[ply,'FP/G']
-					on_ros.loc[ply,'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
+
 		if len(on_ros) >0:
-			srtd_by_stat_score = on_ros.sort_values('Stat Score', ascending = False).index
 			for ply in on_ros.index:
-				on_ros.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score == ply)[0][0]
-				on_ros.loc[ply, 'Final'] = on_ros.loc[ply,'FP_Pred']*((outof - on_ros.loc[ply, 'Stat Rank'])/outof)#(on_ros.loc[ply, 'Stat Rank'] + on_ros.loc[ply, 'Avg'])/2
+				on_ros.loc[ply,'Final'] = positional[p].loc[ply,'Weekly Final']
+
+
 			on_ros.sort_values('Final', inplace = True, ascending = False, axis=0)
 		lineup[p] = on_ros.copy()
 		#### streamers
 		for ply in strm.index:
-			pp = strm.loc[ply,'Pos.'] #in case we are in the flex position
 			if ply in positional[p].index:
 				strm.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
-				strm.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'Avg']) - 1]
+				strm.loc[ply,'FP_Pred'] =positional[p].loc[ply,'Wk_FP_Pred']
 				strm.loc[ply,'Best'] = positional[p].loc[ply,'Best']
 				strm.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
+				strm.loc[ply,'Std_Dev'] = positional[p].loc[ply,'Std_Dev']
 				strm.loc[ply,'Ceiling'] = strm.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
 				strm.loc[ply,'Info'] = positional[p].loc[ply,'Info']
 				strm.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
-			if ply in matchups[pp].index:
-				mtch = matchups[pp].loc[ply,str(week)]
-				# print(ply,pp,mtch)
-				if mtch != 'nan':
-					if mtch != 'BYE':
-						strm.loc[ply,'Matchup Rank'] = mtch.replace(strm.loc[ply,'Opp'], '')
-					else:
-						strm.loc[ply,'Matchup Rank'] = 129
+				strm.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'Weekly Matchup Rank']
+
 			if p not in ['K','DST']:
-				if ply in snap_analysis[pp].index:
-					strm.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
-					strm.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
-					strm.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
-					strm.loc[ply,'Use %'] = strm.loc[ply,'Snap %']*strm.loc[ply,'Utility %']
-					if p != 'QB':
-						if ply in targets[pp].index:
-							strm.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
-							stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*strm.loc[ply,'Avg Targets']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					else:
-						stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					strm.loc[ply,'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+				strm.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+				strm.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+				if p != 'QB':
+					strm.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
+
+
 			elif p == 'K':
-				if ply in kicker_stats.index:
-					strm.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
-					strm.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
-					strm.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
-					stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'FGA']*strm.loc[ply,'PCT']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					strm.loc[ply, 'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+				strm.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
+
 			elif p == 'DST':
-				if ply in defense_stats.index:
-					strm.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
-					strm.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
-					stscr = (32+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*2)*strm.loc[ply,'FP/G']
-					strm.loc[ply,'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
-		srtd_by_stat_score_str = strm.sort_values('Stat Score', ascending = False).index
-		for ply in strm.index:
-			strm.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score_str == ply)[0][0]
-			strm.loc[ply, 'Final'] = strm.loc[ply,'FP_Pred']*((outof - strm.loc[ply, 'Stat Rank'])/outof)#(strm.loc[ply, 'Stat Rank'] + strm.loc[ply, 'Avg'])/2
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'Weekly Stat Scale']
+
+		if len(strm) >0:
+			for ply in strm.index:
+				strm.loc[ply,'Final'] = positional[p].loc[ply,'Weekly Final']
+
 		strm.sort_values('Final', inplace = True, ascending = False,axis=0)
-		streamers[p] = strm
+		streamers[p] = strm.copy()
+
+	# for lp in lineup.items():
+	# 	print(lp[0],lp[1].columns)
+
+
+	# realpos = [p for p in positions.keys() if (p != 'FLEX') and (p != 'SUPERFLEX') and (positions[p]) and (p != 'BENCH')]
+	# roster_with_info = pd.concat([lineup[pos].loc[:,['Avg','Std_Dev','Stat Scale','Pos.']] for pos in realpos],sort = True)
+
+
 
 	lineup['FLEX'] = pd.concat([lineup['RB'],lineup['WR'],lineup['TE']], sort = True)
 	lineup['FLEX'].sort_values('Final',inplace = True)
@@ -533,7 +986,11 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 	streamers['SUPERFLEX'] = pd.concat([streamers['FLEX'],streamers['QB']],sort = True)
 	streamers['SUPERFLEX'].sort_values('Final',inplace = True)
 
-	# if len(pos) == 6:
+
+
+
+
+
 	starters = pd.DataFrame(columns = lineup['QB'].columns)
 	for p in [ps for ps in pos if positions[ps] > 0]:
 		strpo = pd.DataFrame(lineup[p])
@@ -543,14 +1000,15 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 		strpo.sort_values('Final', inplace = True, ascending = False,axis=0)
 		strpo = strpo.iloc[:Roster[p]]
 		starters = pd.concat([starters,strpo], sort = True)
-	# starters.drop('FTeam',axis = 1,inplace = True)
 	starters.drop('Player', axis = 1,inplace = True)
 	starters.drop('Best',axis = 1,inplace = True)
 	starters.drop('Worst', axis = 1,inplace = True)
 	if 'Snap %' in starters.columns:
 		starters.drop('Snap %', axis = 1,inplace = True)
 		starters.drop('Utility %',axis = 1, inplace = True)
-	starters = starters[['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score','FP/G','Avg Targets','Use %']]
+		starters = starters[['Pos','Opp','Matchup Rank','Final','Avg','Ceiling','Stat Scale','FP/G','Avg Targets','Use %']]
+	else:
+		starters = starters[['Pos','Opp','Matchup Rank','Final','Avg','Ceiling']]
 	bench = pd.DataFrame(columns = lineup['QB'].columns)
 	for p in [ps for ps in pos if "FLEX" not in ps]:
 		bnpo = lineup[p].copy()
@@ -565,23 +1023,20 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 	if 'Snap %' in bench.columns:
 		bench.drop('Snap %', axis = 1,inplace = True)
 		bench.drop('Utility %',axis = 1, inplace = True)
-	bench = bench[['Pos','Opp','Matchup Rank','Final','Avg','Stat Rank','Ceiling','Stat Score','FP/G','Avg Targets','Use %']]
-	# if not retu:
-	# 	print('Suggested Lineup:\n', starters)
-	# 	print('Bench:\n', bench)
+		bench = bench[['Pos','Opp','Matchup Rank','Final','Avg','Ceiling','Stat Scale','FP/G','Avg Targets','Use %']]
+	else:
+		bench = bench[['Pos','Opp','Matchup Rank','Final','Avg','Ceiling']]
+
 	for p in pos:
-		# streamers[p].drop('Notes', axis =1 ,inplace = True)
-		# streamers[p].drop('FP_Notes', axis =1 ,inplace = True)
+
 		streamers[p].drop('ROS_Avg', axis =1 ,inplace = True)
 		streamers[p].drop('ROS_Best', axis =1 ,inplace = True)
 		streamers[p].drop('ROS_Worst', axis =1 ,inplace = True)
 		streamers[p].drop('ROS_Std', axis =1 ,inplace = True)
-		# streamers[p].drop('ROS_Notes', axis =1 ,inplace = True)
 		if 'Snap %' in streamers[p].columns:
 			streamers[p].drop('Snap %', axis =1 ,inplace = True)
 			streamers[p].drop('Utility %', axis =1 ,inplace = True)
-		# if not retu:
-		# 	print('Possible Streamers ',p,':\n', streamers[p].iloc[:5])
+
 	strmdict = {}
 	lineup = dict([(lp,lineup[lp]) for lp in lineup.keys() if len(lineup[lp]) >0])
 	streamers = dict([(lp,streamers[lp]) for lp in streamers.keys() if lp in lineup.keys()])
@@ -590,162 +1045,115 @@ def this_week(week,available_positional,positional,matchups,snap_analysis,target
 			strmdict[p] = streamers[p][streamers[p].loc[:,'Final']>min_sc].sort_values('Final', ascending = False)
 	return[starters, bench, strmdict, lineup, streamers]
 
-
-def rest_of_schedule(week,available_positional,positional,matchups,snap_analysis,targets,kicker_stats,defense_stats,rost,positions,history):#, retu = False):
+def rest_of_schedule(available_positional,positional,rost,positions):
 	'''A look at the ROS'''
-	# if len(pos) == 0:
-	outof = 40
 	pos = [ps for ps in positions.keys() if ps != 'BENCH']
 	lineup = dict()
 	streamers = dict()
-	score_by_rk = dict()
 	for p in [ps for ps in pos if ((ps != 'SUPERFLEX') and (ps != 'FLEX'))]:
-		# if p != 'FLEX':
-		on_ros = pd.DataFrame(rost[rost.Pos == p])
-		score_by_rk[p] = history[p][1]#GetHistory(p)[1]
-		# else:
-		# 	on_ros = pd.DataFrame(rost[[r in ['RB','WR','TE'] for r in rost.Pos]])
+		on_ros = pd.DataFrame(rost[rost.loc[:,'Pos'] == p])
+
 		on_ros.index = on_ros.Player
-		strm = pd.DataFrame(available_positional[p][available_positional[p].Opp != ''])
-		for ind in strm.index:
-			strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
+		strm = pd.DataFrame(index = available_positional[p][available_positional[p].Opp != ''].index)
+		# for ind in strm.index:
+		# 	strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
+
 		for ply in on_ros.index:
-			pp = on_ros.loc[ply,'Pos'] #in case we are in the flex position
 			if ply in positional[p].index:
 				on_ros.loc[ply,'Avg'] = positional[p].loc[ply,'ROS_Avg']
-				on_ros.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'ROS_Avg']) - 1]
+				on_ros.loc[ply,'FP_Pred'] = positional[p].loc[ply,'ROS_FP_Pred']
 				on_ros.loc[ply,'Best'] = positional[p].loc[ply,'ROS_Best']
 				on_ros.loc[ply,'Worst'] = positional[p].loc[ply,'ROS_Worst']
+				on_ros.loc[ply,'Std_Dev'] = positional[p].loc[ply,'ROS_Std']
 				on_ros.loc[ply,'Ceiling'] = on_ros.loc[ply,'Best']*positional[p].loc[ply,'ROS_Std']
 				on_ros.loc[ply,'Info'] = positional[p].loc[ply,'Info']
-			if ply in matchups[pp].index:
-				mtch = matchups[pp].loc[ply].values[week:]
-				avg_mt = 0.0
-				for mt in mtch:
-					if mt != 'nan':
-						if mt != 'BYE':
-							numbers = where([car.isdigit() for car in mt])[0]
-							if len(numbers)>1:
-								avg_mt += float(mt[numbers[0]:numbers[1]+1])
-							else:
-								avg_mt += float(mt[numbers[0]:numbers[0]+1])
-				avg_mt = avg_mt/sum([mt != 'BYE' for mt in mtch])
-				on_ros.loc[ply,'Matchup Rank'] = avg_mt
-			else:
-				on_ros.loc[ply,'Matchup Rank'] = 129
+				on_ros.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'ROS Matchup Rank']
 
 			if p not in ['K','DST']:
-				if ply in snap_analysis[pp].index:
-					on_ros.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
-					on_ros.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
-					on_ros.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
-					on_ros.loc[ply,'Use %'] = on_ros.loc[ply,'Snap %']*on_ros.loc[ply,'Utility %']
-					if p != 'QB':
-						if ply in targets[pp].index:
-							on_ros.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
-							stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*on_ros.loc[ply,'Avg Targets']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					else:
-						stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'Use %']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					on_ros.loc[ply,'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+				on_ros.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+				on_ros.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+				if p != 'QB':
+					on_ros.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
+
 			elif p == 'K':
-				if ply in kicker_stats.index:
-					on_ros.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
-					on_ros.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
-					on_ros.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
-					stscr = on_ros.loc[ply,'FP/G']*on_ros.loc[ply,'FGA']*on_ros.loc[ply,'PCT']*(32*3+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*4)
-					on_ros.loc[ply, 'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+				on_ros.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
 			elif p == 'DST':
-				if ply in defense_stats.index:
-					on_ros.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
-					on_ros.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
-					stscr = (32+(33-float(on_ros.loc[ply,'Matchup Rank'])))/(32*2)*on_ros.loc[ply,'FP/G']
-					on_ros.loc[ply,'Stat Score'] = stscr
-				else:
-					on_ros.loc[ply,'Stat Score'] = 0
+				on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				on_ros.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+				on_ros.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
+
 		if len(on_ros) >0:
-			srtd_by_stat_score = on_ros.sort_values('Stat Score', ascending = False).index
 			for ply in on_ros.index:
-				on_ros.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score == ply)[0][0]
-				on_ros.loc[ply, 'Final'] = on_ros.loc[ply,'FP_Pred']*((outof - on_ros.loc[ply, 'Stat Rank'])/outof)#(on_ros.loc[ply, 'Stat Rank'] + on_ros.loc[ply, 'Avg'])/2
+				on_ros.loc[ply,'Final'] = positional[p].loc[ply,'ROS Final']
+
+
 			on_ros.sort_values('Final', inplace = True, ascending = False, axis=0)
 		lineup[p] = on_ros.copy()
 		#### streamers
 		for ply in strm.index:
-			pp = strm.loc[ply,'Pos.'] #in case we are in the flex position
 			if ply in positional[p].index:
 				strm.loc[ply,'Avg'] = positional[p].loc[ply,'ROS_Avg']
-				strm.loc[ply,'FP_Pred'] = score_by_rk[p][int(positional[p].loc[ply,'ROS_Avg'])-1]
+				strm.loc[ply,'FP_Pred'] =positional[p].loc[ply,'ROS_FP_Pred']
 				strm.loc[ply,'Best'] = positional[p].loc[ply,'ROS_Best']
 				strm.loc[ply,'Worst'] = positional[p].loc[ply,'ROS_Worst']
-				strm.loc[ply,'Ceiling'] = strm.loc[ply,'ROS_Best']*positional[p].loc[ply,'ROS_Std']
+				strm.loc[ply,'Std_Dev'] = positional[p].loc[ply,'ROS_Std']
+				strm.loc[ply,'Ceiling'] = strm.loc[ply,'Best']*positional[p].loc[ply,'ROS_Std']
 				strm.loc[ply,'Info'] = positional[p].loc[ply,'Info']
-			if ply in matchups[pp].index:
-				mtch = matchups[pp].loc[ply].values[week:]
-				avg_mt = 0.0
-				for mt in mtch:
-					if mt != 'nan':
-						if mt != 'BYE':
-							numbers = where([car.isdigit() for car in mt])[0]
-							if len(numbers)>1:
-								avg_mt += float(mt[numbers[0]:numbers[1]+1])
-							else:
-								avg_mt += float(mt[numbers[0]:numbers[0]+1])
-				avg_mt = avg_mt/sum([mt != 'BYE' for mt in mtch])
-				strm.loc[ply,'Matchup Rank'] = avg_mt
-			else:
-				strm.loc[ply,'Matchup Rank'] = 129
+				strm.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'ROS Matchup Rank']
+
 			if p not in ['K','DST']:
-				if ply in snap_analysis[pp].index:
-					strm.loc[ply,'FP/G'] = snap_analysis[pp].loc[ply,'Fantasy Pts']/snap_analysis[pp].loc[ply,'Games']
-					strm.loc[ply,'Snap %'] = snap_analysis[pp].loc[ply,'Snap %']/100
-					strm.loc[ply,'Utility %'] = snap_analysis[pp].loc[ply,'Util %']/100
-					strm.loc[ply,'Use %'] = strm.loc[ply,'Snap %']*strm.loc[ply,'Utility %']
-					if p != 'QB':
-						if ply in targets[pp].index:
-							strm.loc[ply,'Avg Targets'] = targets[pp].loc[ply,'AVG']
-							stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*strm.loc[ply,'Avg Targets']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					else:
-						stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'Use %']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					strm.loc[ply,'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+				strm.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+				strm.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+				if p != 'QB':
+					strm.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
+
+
 			elif p == 'K':
-				if ply in kicker_stats.index:
-					strm.loc[ply,'FP/G'] = kicker_stats.loc[ply,'FPTS/G']
-					strm.loc[ply,'FGA'] = kicker_stats.loc[ply,'FGA']
-					strm.loc[ply,'PCT'] = kicker_stats.loc[ply,'PCT']/100
-					stscr = strm.loc[ply,'FP/G']*strm.loc[ply,'FGA']*strm.loc[ply,'PCT']*(32*3+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*4)
-					strm.loc[ply, 'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+				strm.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
+
 			elif p == 'DST':
-				if ply in defense_stats.index:
-					strm.loc[ply,'FP/G'] = defense_stats.loc[ply,'FPTS/G']
-					strm.loc[ply,'Turnovers'] = defense_stats.loc[ply,'INT'] + defense_stats.loc[ply,'FR']
-					stscr = (32+(33-float(strm.loc[ply,'Matchup Rank'])))/(32*2)*strm.loc[ply,'FP/G']
-					strm.loc[ply,'Stat Score'] = stscr
-				else:
-					strm.loc[ply,'Stat Score'] = 0
-		srtd_by_stat_score_str = strm.sort_values('Stat Score', ascending = False).index
-		for ply in strm.index:
-			strm.loc[ply, 'Stat Rank'] = where(srtd_by_stat_score_str == ply)[0][0]
-			strm.loc[ply, 'Final'] = strm.loc[ply,'FP_Pred']*((outof - strm.loc[ply, 'Stat Rank'])/outof)#(strm.loc[ply, 'Stat Rank'] + strm.loc[ply, 'Avg'])/2
+				strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+				strm.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+				strm.loc[ply,'Stat Scale'] = positional[p].loc[ply,'ROS Stat Scale']
+
+		if len(strm) >0:
+			for ply in strm.index:
+				strm.loc[ply,'Final'] = positional[p].loc[ply,'ROS Final']
+
 		strm.sort_values('Final', inplace = True, ascending = False,axis=0)
-		streamers[p] = strm
+		streamers[p] = strm.copy()
+
+	# for lp in lineup.items():
+	# 	print(lp[0],lp[1].columns)
+
+
+	# realpos = [p for p in positions.keys() if (p != 'FLEX') and (p != 'SUPERFLEX') and (positions[p]) and (p != 'BENCH')]
+	# roster_with_info = pd.concat([lineup[pos].loc[:,['Avg','Std_Dev','Stat Scale','Pos.']] for pos in realpos],sort = True)
+
+
 
 	lineup['FLEX'] = pd.concat([lineup['RB'],lineup['WR'],lineup['TE']], sort = True)
-	lineup['FLEX'].sort_values('Final',inplace = True)
+	lineup['FLEX'].sort_values('Final',inplace = True, ascending = False)
 	lineup['SUPERFLEX'] = pd.concat([lineup['FLEX'],lineup['QB']],sort = True)
-	lineup['SUPERFLEX'].sort_values('Final',inplace = True)
+	lineup['SUPERFLEX'].sort_values('Final',inplace = True, ascending = False)
 
 	streamers['FLEX'] = pd.concat([streamers['RB'],streamers['WR'],streamers['TE']],sort = True)
-	streamers['FLEX'].sort_values('Final',inplace = True)
+	streamers['FLEX'].sort_values('Final',inplace = True, ascending = False)
 	streamers['SUPERFLEX'] = pd.concat([streamers['FLEX'],streamers['QB']],sort = True)
-	streamers['SUPERFLEX'].sort_values('Final',inplace = True)
+	streamers['SUPERFLEX'].sort_values('Final',inplace = True, ascending = False)
+
 
 	strmdict = {}
 	lineup = dict([(lp,lineup[lp]) for lp in lineup.keys() if len(lineup[lp]) >0])
@@ -753,79 +1161,148 @@ def rest_of_schedule(week,available_positional,positional,matchups,snap_analysis
 	for p in streamers.keys():
 			min_sc = min(lineup[p].loc[:,'Final'])
 			strmdict[p] = streamers[p][streamers[p].loc[:,'Final']>min_sc].sort_values('Final', ascending = False)
-
 	return[lineup, streamers, strmdict]
 
 
 
-def team_score(tm, give = [], get = []):
+
+	#
+	#
+	#
+	# pos = [ps for ps in positions.keys() if ps != 'BENCH']
+	# lineup = dict()
+	# streamers = dict()
+	# for p in [ps for ps in pos if ((ps != 'SUPERFLEX') and (ps != 'FLEX'))]:
+	# 	on_ros = pd.DataFrame(rost[rost.Pos == p])
+	#
+	# 	on_ros.index = on_ros.Player
+	# 	strm = pd.DataFrame(available_positional[p][available_positional[p].Opp != ''])
+	# 	for ind in strm.index:
+	# 		strm.loc[ind,'Pos.'] = strm.loc[ind,'Pos.']
+	# 	for ply in on_ros.index:
+	# 		if ply in positional[p].index:
+	# 			on_ros.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
+	# 			on_ros.loc[ply,'FP_Pred'] = positional[p].loc[ply,'ROS_FP_Pred']
+	# 			on_ros.loc[ply,'Best'] = positional[p].loc[ply,'Best']
+	# 			on_ros.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
+	# 			on_ros.loc[ply,'Ceiling'] = on_ros.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
+	# 			on_ros.loc[ply,'Info'] = positional[p].loc[ply,'Info']
+	# 			if positional[p].loc[ply,'Opp'] != '':
+	# 				on_ros.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
+	# 			else:
+	# 				on_ros.loc[ply,'Opp'] = 'BYE/HURT'
+	# 			on_ros.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'ROS Matchup Rank']
+	#
+	# 		if p not in ['K','DST']:
+	# 			on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			on_ros.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+	# 			on_ros.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+	# 			on_ros.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+	# 			if p != 'QB':
+	# 				on_ros.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+	# 			on_ros.loc[ply,'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	#
+	# 		elif p == 'K':
+	# 			on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			on_ros.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+	# 			on_ros.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+	# 			on_ros.loc[ply, 'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	# 		elif p == 'DST':
+	# 			on_ros.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			on_ros.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+	# 			on_ros.loc[ply,'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	# 	if len(on_ros) >0:
+	# 		for ply in on_ros.index:
+	# 			on_ros.loc[ply,'Final'] = positional[p].loc[ply,'ROS Final']
+	#
+	#
+	# 		on_ros.sort_values('Final', inplace = True, ascending = False, axis=0)
+	# 	lineup[p] = on_ros.copy()
+	# 	#### streamers
+	# 	for ply in strm.index:
+	# 		pp = strm.loc[ply,'Pos.'] #in case we are in the flex position
+	# 		if ply in positional[p].index:
+	# 			strm.loc[ply,'Avg'] = positional[p].loc[ply,'Avg']
+	# 			strm.loc[ply,'FP_Pred'] = positional[p].loc[ply,'ROS_FP_Pred']
+	# 			strm.loc[ply,'Best'] = positional[p].loc[ply,'Best']
+	# 			strm.loc[ply,'Worst'] = positional[p].loc[ply,'Worst']
+	# 			strm.loc[ply,'Ceiling'] = strm.loc[ply,'Best']*positional[p].loc[ply,'Std_Dev']
+	# 			strm.loc[ply,'Info'] = positional[p].loc[ply,'Info']
+	# 			strm.loc[ply,'Opp'] = positional[p].loc[ply,'Opp']
+	# 			strm.loc[ply,'Matchup Rank'] = positional[p].loc[ply, 'ROS Matchup Rank']
+	#
+	# 		if p not in ['K','DST']:
+	# 			strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			strm.loc[ply,'Snap %'] = positional[p].loc[ply,'Snap %']
+	# 			strm.loc[ply,'Utility %'] = positional[p].loc[ply,'Utility %']
+	# 			strm.loc[ply,'Use %'] = positional[p].loc[ply,'Use %']
+	# 			if p != 'QB':
+	# 				strm.loc[ply,'Avg Targets'] = positional[p].loc[ply,'Avg Targets']
+	# 			strm.loc[ply,'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	#
+	# 		elif p == 'K':
+	# 			strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			strm.loc[ply,'FGA'] = positional[p].loc[ply,'FGA']
+	# 			strm.loc[ply,'PCT'] = positional[p].loc[ply,'PCT']
+	# 			strm.loc[ply, 'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	# 		elif p == 'DST':
+	# 			strm.loc[ply,'FP/G'] = positional[p].loc[ply,'FP/G']
+	# 			strm.loc[ply,'Turnovers'] = positional[p].loc[ply,'Turnovers']
+	# 			strm.loc[ply,'Stat Score'] = positional[p].loc[ply,'ROS Stat Score']
+	#
+	# 	if len(strm) >0:
+	# 		for ply in strm.index:
+	# 			strm.loc[ply,'Final'] = positional[p].loc[ply,'ROS Final']
+	#
+	# 	strm.sort_values('Final', inplace = True, ascending = False,axis=0)
+	# 	streamers[p] = strm
+	#
+	# lineup['FLEX'] = pd.concat([lineup['RB'],lineup['WR'],lineup['TE']], sort = True)
+	# lineup['FLEX'].sort_values('Final',inplace = True)
+	# lineup['SUPERFLEX'] = pd.concat([lineup['FLEX'],lineup['QB']],sort = True)
+	# lineup['SUPERFLEX'].sort_values('Final',inplace = True)
+	#
+	# streamers['FLEX'] = pd.concat([streamers['RB'],streamers['WR'],streamers['TE']],sort = True)
+	# streamers['FLEX'].sort_values('Final',inplace = True)
+	# streamers['SUPERFLEX'] = pd.concat([streamers['FLEX'],streamers['QB']],sort = True)
+	# streamers['SUPERFLEX'].sort_values('Final',inplace = True)
+	#
+	# strmdict = {}
+	# lineup = dict([(lp,lineup[lp]) for lp in lineup.keys() if len(lineup[lp]) >0])
+	# streamers = dict([(lp,streamers[lp]) for lp in streamers.keys() if lp in lineup.keys()])
+	# for p in streamers.keys():
+	# 		min_sc = min(lineup[p].loc[:,'Final'])
+	# 		strmdict[p] = streamers[p][streamers[p].loc[:,'Final']>min_sc].sort_values('Final', ascending = False)
+	#
+	# return[lineup, streamers, strmdict]
+
+
+
+def team_score(available_positional,positional,roster,positions, add = [], drop = []):
 	'''Score the team by player rank weighted by starting'''
-	ros = dict()
-	for p in positional:
-		ros[p] = make_ros_list(p)
-	if not isinstance(give, list):
-		give = [give]
-	if not isinstance(get, list):
-		get = [get]
-	the_ros = rosters[tm]
-	starters, bench = this_week(rost = the_ros, retu = True)[:2]
-	roscores = []
-	for pos in ros:
-		starts = starters[starters.Pos == pos].index
-		start_rks = ros[pos].loc[starts]
-		benchers = bench[bench.Pos == pos].index
-		bench_rks = ros[pos].loc[benchers]
-		starter_avg = mean(start_rks.ROS_Avg.astype(float))/len(ros[pos])
-		bench_avg = mean(bench_rks.ROS_Avg.astype(float))/len(ros[pos])
-		if isnan(bench_avg):
-			bench_avg = 0
-		scr = 0.75*starter_avg + 0.25*bench_avg
-		roscores = roscores + [scr]
-	if len(get) != 0 or len(give) != 0:
-		newros = the_ros[[j not in give for j in the_ros.Player]]
-		for pl in get:
-			newp = pd.DataFrame([[player_list.loc[pl,'Pos.'], pl, tm]], columns = ['Pos','Player','FTeam'])
-			newros = newros.append(newp, ignore_index = True)
-		hypscores = []
-		nwstarters, nwbench = this_week(rost = newros, retu = True)[:2]
-		for pos in ros:
-			nwstarts = nwstarters[nwstarters.Pos == pos].index
-			nwstart_rks = ros[pos].loc[nwstarts]
-			nwbenchers = nwbench[nwbench.Pos == pos].index
-			nwbench_rks = ros[pos].loc[nwbenchers]
-			nwstarter_avg = mean(nwstart_rks.ROS_Avg.astype(float))/len(ros[pos])
-			nwbench_avg = mean(nwbench_rks.ROS_Avg.astype(float))/len(ros[pos])
-			if isnan(nwbench_avg):
-				nwbench_avg = 0
-			hypscr = 0.75*nwstarter_avg + 0.25*nwbench_avg
-			hypscores = hypscores + [hypscr]
-	if len(get) != 0 or len(give) != 0:
-		return [sum(1-array(roscores)), sum(1-array(hypscores))]
-	else:
-		return sum(array(roscores))
+	# weekly_team =  this_week(available_positional,positional,roster,positions)
+	# ros_team = rest_of_schedule(available_positional,positional,roster,positions)
+	#
+	#
+	# week_starters = weekly_team[0]
+	# week_score = sum(week_starters.loc[:,'Final'])
+	return None
+
+
+
+
 
 def tradeit(team1, players1, team2, players2):
 	score1 = team_score(tm = team1, give = players1, get = players2)
 	score2 = team_score(tm = team2, give = players2, get = players1)
 	return [(score1[1] - score1[0])/score1[0], (score2[1] - score2[0])/score2[0]]
 
-def who_to_drop(ros):
-	'''Find the least valuable player on your team'''
-	final_score= pd.DataFrame(columns = ['Team After Dropping'])
-	for plyr in ros.Player:
-		final_score.loc[plyr] = team_score(give = [plyr])[1]
-	return final_score.sort_values('Team After Dropping')
 
-def posit_sit(pos, team, ret = True):
-	[on_roster,stream] = this_week(pos = [pos], rost = rosters[team], retu = True)
-	availab = ros[pos][ros[pos].Fant_Team == 'Available']
-	rost_ros = ros[pos].loc[on_roster.index]
-	if ret:
-		return [on_roster,stream,rost_ros,availab]
-	else:
-		print('------------THIS WEEK -----------','\n', on_roster,'\n',stream[:5])
-		print('------------REST OF YEAR--------------','\n', rost_ros,'\n', availab[:10])
-		return None
 
 
 
@@ -874,36 +1351,45 @@ def GetHistory(pos):
 	return historical_stats, avg_by_rank
 
 
-# start,sit,stream = this_week(retu = True)
-# start
-# sit
-# stream[0]
-# stream[1]
-# stream[2]
-# stream[3]
-# stream[4]
-# stream[5]
-#
-# rbs = posit_sit('RB')
-# rbs[2]
-# rbs[3]
-# def rest_of_season(pos = [], players = []):
-# 	'''Rest of season ranker of available players & on roster, OR list of players (for trade comparisons)'''
-#
-# def find_breakout():
-# 	'''Identify players that could be breaking out - recent
-# 		increase in production, number of targets, number of touches, etc'''
-#
-# def stream_d():
-# 	'''Figure out which defense to stream this week, (gives some small weight to upcoming schedule'''
-#
-# def check_trade(give, get):
-# 	'''Assess a potential trade'''
-#
-# def find_trade(pos = []):
-# 	'''identify good (realistic) trades'''
-#
-#
+def GetHistoryFromUSB(pos):
+	years= list(range(2001,2019))
+
+	historical_stats = {}
+
+	for yr in years:
+		historical_stats[yr] = pd.read_pickle('playerdata/YearlyFFballHistory/' + pos + '/' + str(yr))
+
+	tot_by_rk = []
+	for his in historical_stats.values():
+	    if len(his) > len(tot_by_rk):
+	        tot_by_rk = tot_by_rk + [0]*(len(his)-len(tot_by_rk))
+	    for i in his.index:
+	        tot_by_rk[i-1] += float(his.loc[i,'FPts/G'])#/float(his.loc[1,'FPts/G'])
+
+	avg_by_rank = np.array(tot_by_rk)/len(historical_stats)
+
+	return historical_stats, avg_by_rank
+
+
+def save_histpoints(pos):
+	posdat = []
+	for yr in [str(y) for y in range(2001,2018)]:
+	    for wk in [str(w) for w in range(1,17)]:
+	        dat = pd.read_pickle('playerdata/WeeklyFFballHistory/'+pos+'/'+yr+'/'+wk)
+	        for ind in dat.index:
+	            if len(posdat) >= ind:
+	                posdat[ind-1] += [dat.loc[ind,'FPts']]
+	            else:
+	                posdat += [[dat.loc[ind,'FPts']]]
+	mxlen = max([len(dat) for dat in posdat])
+	for ind in range(len(posdat)):
+		if len(posdat[ind]) < mxlen:
+			numneed = mxlen - len(posdat[ind])
+			# print(posdat[ind])
+			posdat[ind] += [mean(np.array(posdat[ind]).astype(float))]*numneed
+
+	posdat = np.array(posdat)
+	np.save('leagueinfo/'+pos+'distribution',posdat)
 
 
 ####### Data Frames Created #######
@@ -915,7 +1401,7 @@ def GetHistory(pos):
 #rest of schedule rankings from fantasy pros [dictionary] - ros_rks['position'] - player name - Rank Name Bye Best Worst Avg Std Dev ADP vs ADP
 #various stat dataframes - targets, snaps, etc
 
-#fantasy rosters [dictionary] - rosters['Person'] (example rosters['Jim']) - int - Pos Player FTeam
+#fantasy rosters [dictionary] - rosters['Person'] (example rosters['']) - int - Pos Player FTeam
 #players taken - taken_players - player name - Pos Player Fteam
 #players available - available_players - player name - Team Pos Depth Notes ROS_Avg ROS_Best ROS_Worst ROS_Std ROS_Notes
 #available by position [dictionary] - available_postional['position'] - player name - Team Pos Depth Notes FP_Notes Avg Best Worst Std_Dev Opp ROS_Avg ROS_Best ROS_Worst ROS_Std ROS_Notes
