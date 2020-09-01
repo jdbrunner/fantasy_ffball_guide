@@ -290,17 +290,26 @@ def team_need(team,drafted_list,starting_slots):
 		current_team = pd.DataFrame(columns = drafted_list.columns)
 	on_team = dict()
 	num_need = dict()
-	adjust_slots = {'QB':0,'RB':0,'WR':0,'TE':0,'DST':0,'K':0}
-	for ky in adjust_slots.keys():
-		adjust_slots[ky] = starting_slots[ky]
-		if ky == 'QB':
-			adjust_slots[ky] += 0.8*starting_slots['SUPERFLEX']
-		if ky in ['RB','WR']:
-			adjust_slots[ky] += 0.1*starting_slots['SUPERFLEX'] + 0.5*starting_slots['FLEX']
-	for p in starting_slots:
+	adjust_slots = {'QB':starting_slots['QB'] + 0.8*starting_slots['SUPERFLEX'],
+	'RB':starting_slots['RB'] +  0.1*starting_slots['SUPERFLEX'] + 0.4*starting_slots['FLEX'],
+	'WR':starting_slots['WR'] +  0.1*starting_slots['SUPERFLEX'] + 0.4*starting_slots['FLEX'],
+	'TE':starting_slots['TE'] +  0.2*starting_slots['FLEX'],
+	'DST':starting_slots['DST'],
+	'K':starting_slots['K']}
+	for p in adjust_slots:
 		on_team[p] = current_team[[dft == p for dft in current_team.Pos]]
 		have = sum([(1 - (on_team[p].loc[ply, 'Tier'] - 1)/25) for ply in on_team[p].index])
-		num_need[p] = starting_slots[p] - have
+
+		half_decay = adjust_slots[p]/np.log(2)
+		if half_decay:
+			prob_start = np.exp(-(have**2)/half_decay)
+		else:
+			prob_start = 0
+
+		num_need[p] = prob_start
+
+
+
 	return [on_team, num_need]
 
 
@@ -341,6 +350,12 @@ def draft_scarcity(pos,player_list,round,pick,order,drafted_list,starting_slots)
 	ppgs_diff = [ppgs[i] - ppgs[i+1] for i in range(len(ppgs)-1)]
 	worst_drop = sum(ppgs_diff)
 
+	#### figure about how valuable each position is this round (in expected PPG)
+	posvals = {}
+	for ps in np.unique(player_list.Pos.values):
+	    nextfive = np.sort(player_list[player_list.Pos == ps]['PPG'].values)[::-1][:5]
+	    posvals[ps] = np.mean(nextfive)
+
 	#### figure out if anyone else needs a position
 	if round % 2 == 0:
 		tm = order[pick]
@@ -350,12 +365,12 @@ def draft_scarcity(pos,player_list,round,pick,order,drafted_list,starting_slots)
 	other_teams.remove(tm)
 	need_cts = empty(len(other_teams))
 	for tem in range(len(other_teams)):
-		need_cts[tem] = team_need(other_teams[tem],drafted_list,starting_slots)[1][pos]
-	tot_need = sum(need_cts[need_cts > 0])
-	lkly = sum([nd >= 1.5 for nd in need_cts])
-	prbly = sum([(nd >= 0.5 and nd < 1.5) for nd in need_cts])
-	unlky = sum([nd < 0.5 for nd in need_cts])
-	expt_picked = 0.7*lkly + 0.4*prbly + 0.2*unlky
+		startP = team_need(other_teams[tem],drafted_list,starting_slots)[1]
+		ppgAdded = dict([(ps,startP[ps]*posvals[ps]) for ps in startP.keys()])
+		tot = sum(list(ppgAdded.values()))
+		need_cts[tem] = ppgAdded[pos]/tot
+
+	expt_picked = sum(need_cts)
 
 
 	expt_drop = sum(ppgs_diff[:int(expt_picked)])
@@ -363,7 +378,7 @@ def draft_scarcity(pos,player_list,round,pick,order,drafted_list,starting_slots)
 	biggest_drop_where = array(ppgs_diff).argsort()[-1]
 
 
-	return [num_left[0], tier_weighted_left, worst_drop, expt_drop, biggest_drop_where, biggest_drop, expt_picked, tot_need]
+	return [num_left[0], tier_weighted_left, worst_drop, expt_drop, biggest_drop_where, biggest_drop, expt_picked]
 
 
 def assess_player(player,player_list,round,pick,order,drafted_list,starting_slots):
@@ -372,24 +387,23 @@ def assess_player(player,player_list,round,pick,order,drafted_list,starting_slot
 	##### Score based on expert rankings (ppg, based off of fitting to past data with position ranking)
 	initial_score = player_info.PPG
 	##### Adjust for best/worst/std -  start with the mean expert rank
-	#### but we can imagine their rank as a RV and see the median
-	### and std deviation. These things tell us how risky a pick is
-	median_rk = 0.5*(player_info.Best_Rank + player_info.Worst_Rank)
-	risk = player_info.Rank_Std_Dev + (median_rk - initial_score)
+	#### but we can imagine their rank as a RV and see
+	###  std deviation. This tells us how risky a pick is
+	risk = player_info.Rank_Std_Dev
 	##### Adjust for draft scarcity (position)
-	t1l, twl, wd, ep, bdl, bd, ep, tn = draft_scarcity(fant_posi,player_list,round,pick,order,drafted_list,starting_slots)
-	pos_availibility =  0.7*ep + 0.2*wd - 0.1*twl##About how much worse you can expect what you get to be if you pass on the position
+	t1l, twl, wd, edr, bdl, bd, ep = draft_scarcity(fant_posi,player_list,round,pick,order,drafted_list,starting_slots)
 	##### Adjust for team need (postion)
 	if round%2 == 1:
 		team = order[pick]
 	else:
 		team = order[9-pick]
-	num_need = team_need(team,drafted_list,starting_slots)[1]
+	num_need = team_need(team,drafted_list,starting_slots)[1]#probability (approximately) of starting this player based on number already picked.
 	of_posit = num_need[fant_posi]
+	PPGAdded = initial_score*of_posit
 	### Compute a final score
-	final_score = initial_score + 1.5*of_posit*round + 0.75*pos_availibility*round
+	final_score = PPGAdded*edr*np.exp(-(risk**2)/100) #Expected PPG*Probability of starting*Expected loss if taking position next round instead*function of risk
 	bdandw = (bd,bdl)
-	assessment = pd.DataFrame([[player_info['Pos'], player_info['Team'],final_score, risk, player_info['Tier'],player_info['PPG'],player_info['Rank'], ep,wd,bdandw, of_posit]], columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need'], index = [player])
+	assessment = pd.DataFrame([[player_info['Pos'], player_info['Team'],final_score, risk, player_info['Tier'],player_info['PPG'],player_info['Rank'], edr,wd,bdandw, of_posit,PPGAdded]], columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need','PPG Added'], index = [player])
 	return assessment
 
 
@@ -404,17 +418,16 @@ def shortlist(player_list,round,pick,order,drafted_list,starting_slots,fpos = []
 			pos = pos + [po]
 		locs = where([p in pos for p in player_list.Pos])
 		pl = player_list.iloc[locs]
-	top_tier = min(pl.Tier)
-	prelim = pl[pl.loc[:,'Tier'] == top_tier]
-	cter = 1
-	while len(prelim) < 6:
-		prelim = pd.concat([prelim, pl[pl.loc[:,'Tier'] == (top_tier + cter)]])
-		cter = cter + 1
-	short_list = pd.DataFrame(columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need'])
+
+	prelim = pd.DataFrame(columns = pl.columns)
+	for pos in np.unique(pl.Pos.values):
+		prelim = pd.concat([prelim,pl[pl.Pos == pos].iloc[:5]])
+
+	short_list = pd.DataFrame(columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need','PPG Added'])
 	for ply in prelim.index:
 		short_list = pd.concat([short_list, assess_player(ply,player_list,round,pick,order,drafted_list,starting_slots)])
-		short_list.sort_values('Score', inplace = True, ascending = False)
-	return short_list
+	short_list.sort_values('Score', inplace = True, ascending = False)
+	return short_list.iloc[:10]
 
 def FindCliff(pos,DraftedPlayers,HistoricalPPG):
 	whereat = sum(DraftedPlayers.Pos == pos)
