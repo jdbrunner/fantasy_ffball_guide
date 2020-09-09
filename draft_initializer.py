@@ -298,9 +298,16 @@ def team_need(team,drafted_list,starting_slots):
 	'K':starting_slots['K']}
 	for p in adjust_slots:
 		on_team[p] = current_team[[dft == p for dft in current_team.Pos]]
-		have = sum([(1 - (on_team[p].loc[ply, 'Tier'] - 1)/25) for ply in on_team[p].index])
+		have = sum([(1 - (on_team[p].loc[ply, 'Tier'] - 1)/50) for ply in on_team[p].index])
 
-		half_decay = adjust_slots[p]/np.log(2)
+		if p in ['QB','TE']:
+			half_decay = adjust_slots[p]**2/np.log(3)
+		elif p in ['WR','RB']:
+			half_decay = adjust_slots[p]**2/np.log(2)
+		else:
+			half_decay = adjust_slots[p]**2/np.log(10)
+
+
 		if half_decay:
 			prob_start = np.exp(-(have**2)/half_decay)
 		else:
@@ -346,8 +353,13 @@ def draft_scarcity(pos,player_list,round,pick,order,drafted_list,starting_slots)
 	tier_weighted_left = dot(array(num_left), arange(0.25,1.25,0.25)[::-1])
 	nxt_pick = (len(order)-pick)*2
 
+
 	ppgs = the_position.loc[:,'PPG'].values[:nxt_pick + 1]
+
+
+
 	ppgs_diff = [ppgs[i] - ppgs[i+1] for i in range(len(ppgs)-1)]
+
 	worst_drop = sum(ppgs_diff)
 
 	#### figure about how valuable each position is this round (in expected PPG)
@@ -401,7 +413,7 @@ def assess_player(player,player_list,round,pick,order,drafted_list,starting_slot
 	of_posit = num_need[fant_posi]
 	PPGAdded = initial_score*of_posit
 	### Compute a final score
-	final_score = PPGAdded*edr*np.exp(-(risk**2)/100) #Expected PPG*Probability of starting*Expected loss if taking position next round instead*function of risk
+	final_score = PPGAdded*edr #Expected PPG*Probability of starting*Expected loss if taking position next round instead
 	bdandw = (bd,bdl)
 	assessment = pd.DataFrame([[player_info['Pos'], player_info['Team'],final_score, risk, player_info['Tier'],player_info['PPG'],player_info['Rank'], edr,wd,bdandw, of_posit,PPGAdded]], columns = ['Pos', 'Team','Score', 'Risk', 'Tier','PPG', 'Avg_Rank', 'Expected PPG Lost', 'Max PPG Lost', 'Biggest PPG Drop (Picks away)','Team Need','PPG Added'], index = [player])
 	return assessment
@@ -427,7 +439,7 @@ def shortlist(player_list,round,pick,order,drafted_list,starting_slots,fpos = []
 	for ply in prelim.index:
 		short_list = pd.concat([short_list, assess_player(ply,player_list,round,pick,order,drafted_list,starting_slots)])
 	short_list.sort_values('Score', inplace = True, ascending = False)
-	return short_list.iloc[:10]
+	return short_list#.iloc[:10]
 
 def FindCliff(pos,DraftedPlayers,HistoricalPPG):
 	whereat = sum(DraftedPlayers.Pos == pos)
